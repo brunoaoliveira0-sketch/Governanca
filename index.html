@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal CSC - Desempenho e Governança</title>
+
+    <!-- Tailwind CSS (Estilos) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- FontAwesome (Ícones) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel (Compilador para ler código React no navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Import Map para o Firebase funcionar via internet -->
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+        }
+      }
+    </script>
+</head>
+<body class="bg-gray-900 overflow-x-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from 'firebase/app';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDocs, setDoc, getDoc } from 'firebase/firestore';
+
+        const { useState, useEffect, useRef } = React;
+
+        // ==========================================
+        // 1. CONFIGURAÇÃO FIREBASE
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBRGnWbrVV9iaXp2YLjfZ9qLCcyDNbdvCA",
+            authDomain: "csc-desempenho.firebaseapp.com",
+            projectId: "csc-desempenho",
+            storageBucket: "csc-desempenho.firebasestorage.app",
+            messagingSenderId: "962492039958",
+            appId: "1:962492039958:web:8a82e852faf69d0cf40637",
+            measurementId: "G-81B2NDZX71"
+        };
+
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Erro ao inicializar Firebase.", e);
+        }
+
+        const appId = "painel-gov-csc-producao";
+
+        // ==========================================
+        // 2. CONSTANTES E DADOS ESTÁTICOS
+        // ==========================================
+        const BACKGROUND_IMAGE = "GPTW_Fundo Teams.jpg"; 
+        const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+        const GOV_MONTHS_ROWS = [
+          "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
+          "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"
+        ];
+
+        const RT_GOV_ITEMS = [
+          "NÍVEL DE SERVIÇOS CSC TI E TELECOM - EQTL ENERGIA", "Nível de Serviços CSC Operações de TI - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC OPERAÇÕES DE TI - EQTL MA",
+          "NÍVEL DE SERVIÇOS CSC OPERAÇÕES DE TI - EQTL PA", "NÍVEL DE SERVIÇOS CSC OPERAÇÕES DE TI - EQTL PI", "NÍVEL DE SERVIÇOS CSC OPERAÇÕES DE TI - EQTL CEA CSA",
+          "NÍVEL DE SERVIÇOS CSC OPERAÇÕES DE TI - EQTL CEEE", "NÍVEL DE SERVIÇOS CSC OPERAÇÕES DE TI - EQTL GO", "NÍVEL DE SERVIÇOS CSC OPERAÇÕES DE TI - EQTL AL",
+          "NÍVEL DE SERVIÇOS CSC TELECOM - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC SISTEMAS TÉCNICOS - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC SISTEMAS CORPORATIVOS - EQTL ENERGIA",
+          "Nível de Serviços CSC Canais Digitais - EQTL ENERGIA", "Nível de Serviços CSC Sistemas Administrativos - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC SISTEMAS AUXILIARES - EQTL ENERGIA",
+          "NÍVEL DE SERVIÇOS CSC ARQ INFRA E CLOUD - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC SEGURANÇA DA INFORMAÇÃO - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC SUPRIMENTOS - EQTL ENERGIA",
+          "NÍVEL DE SERVIÇOS CSC SUPRIMENTOS DE MATERIAIS - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC COMPRAS DE MATERIAIS - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC MATERIAIS DE REDES - EQTL ENERGIA",
+          "NÍVEL DE SERVIÇOS CSC BPO - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC SUPRIMENTOS DE SERVIÇOS - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC COMPRAS AT MTBT CORP TI - EQTL ENERGIA",
+          "NÍVEL DE SERVIÇOS CSC COMPRAS AT - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC COMPRAS MTBT - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC COMPRAS TI - EQTL ENERGIA",
+          "NÍVEL DE SERVIÇOS CSC COMPRAS CORPORATIVAS - EQTL ENERGIA", "NÍVEL DE SERVIÇOS CSC COMPRAS SANEAMENTO E RENOVÁVEIS - EQTL ENERGIA", "NIVEL DE SERVIÇOS CSC FAC SEG EMPRESARIAL E SERV FIN - EQTL ENERGIA",
+          "Nível de Serviços CSC Serviços Financeiros - EQTL ENERGIA", "Nível de Serviços CSC Folha e Benefícios - EQTL ENERGIA", "Nível de Serviços CSC Pagamentos e Viagens - EQTL ENERGIA",
+          "NÍVEL DE SERVIÇOS CSC RECEBIMENTO FISCAL - EQTL ENERGIA", "NÍVEL DE SERVIÇO CSC FACILITIES - EQTL ENERGIA", "NÍVEL DE SERVIÇO CSC FACILITIES - EQTL AL",
+          "NÍVEL DE SERVIÇO CSC FACILITIES - EQTL MA", "NÍVEL DE SERVIÇO CSC FACILITIES - EQTL PA", "NÍVEL DE SERVIÇO CSC FACILITIES - EQTL PI",
+          "NÍVEL DE SERVIÇO CSC FACILITIES - EQTL CEA CSA", "NÍVEL DE SERVIÇO CSC FACILITIES - EQTL CEEE", "NÍVEL DE SERVIÇO CSC FACILITIES - EQTL GO DF",
+          "NIVEL DE SERVIÇOS CSC SEGURANÇA PATRIMONIAL - EQTL ENERGIA", "SLA ATENDIMENTO CSC GOV COMPRAS - EQTL ENERGIA", "SLA ATENDIMENTO CSC FROTA - EQTL AL",
+          "SLA ATENDIMENTO CSC IMOVEIS - EQTL AL LESTE", "SLA ATENDIMENTO CSC IMÓVEIS - EQTL AL OESTE", "SLA Atendimento CSC - EQTL Serviços e Telecom - FACILITIES - IMÓVEIS - PG",
+          "SLA Atendimento CSC - EQTL Serviços e Telecom - FACILITIES - FROTA - PG", "SLA Atendimento CSC - EQTL ENERGIA - CADASTRO", "SLA ATENDIMENTO CSC FROTA - EQTL PA",
+          "BACKLOG CSC OPERAÇÕES DE TI – EQTL MA", "BACKLOG CSC OPERAÇÕES DE TI – EQTL PA", "BACKLOG CSC OPERAÇÕES DE TI – EQTL PI", "BACKLOG CSC OPERAÇÕES DE TI – EQTL AL",
+          "BACKLOG CSC OPERAÇÕES DE TI – EQTL CEA CSA", "BACKLOG CSC OPERAÇÕES DE TI – EQTL CEEE", "BACKLOG CSC OPERAÇÕES DE TI – EQTL GO DF",
+          "BACKLOG CSC - EQTL ENERGIA - RECEBIMENTO FISCAL", "BACKLOG CSC SISTEMAS CORPORATIVOS – EQTL ENERGIA", "BACKLOG CSC SISTEMAS TÉCNICOS – EQTL ENERGIA",
+          "Backlog CSC Segurança Empresarial – EQTL ENERGIA", "Backlog CSC Imóveis - EQTL AL LESTE", "Backlog CSC Imóveis - EQTL AL OESTE", "Backlog CSC Frota - EQTL AL",
+          "BACKLOG CSC IMÓVEIS FROTA - EQTL CEEE D NORTE", "BACKLOG CSC IMÓVEIS FROTA - EQTL CEEE D SUL", "BACKLOG CSC - EQTL CEACSA - IMÓVEIS + FROTA",
+          "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA CENTRO", "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA LESTE", "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA NOROESTE",
+          "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA NORTE", "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA SUL", "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA CENTRO",
+          "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA NORDESTE", "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA NORTE", "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA OESTE",
+          "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA SUL", "BACKLOG CSC - EQTL PI - IMÓVEIS + FROTA FLORIANO", "BACKLOG CSC - EQTL PI - IMÓVEIS + FROTA METROPOLITANA",
+          "BACKLOG CSC - EQTL PI - IMÓVEIS + FROTA PARNAÍBA", "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA CENTRO", "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA NOROESTE",
+          "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA NORTE", "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA SUDOESTE", "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA SUL",
+          "Backlog CSC - EQTL ENERGIA Sistemas", "Backlog CSC - EQTL ENERGIA - Benefícios", "BACKLOG CSC - EQTL ENERGIA - FOLHA E BENEFÍCIOS"
+        ];
+
+        // ==========================================
+        // 3. GERADORES DE DADOS
+        // ==========================================
+        const generateServiceLevelData = () => {
+          const regions = ["EQTL ENERGIA", "EQTL MARANHÃO", "EQTL PARÁ", "EQTL PIAUÍ", "EQTL ALAGOAS", "EQTL GOIÁS", "EQTL CEEE-D", "EQTL AMAPÁ", "EQTL SERVIÇOS", "EQTL TELECOM"];
+          
+          const structure = [
+            { type: 'TI e Telecom', color: 'bg-green-100', items: [
+                { suffix: "", weight: 1, target: 98.0, isMain: true },
+                { suffix: "Incidentes Críticos de TI e Telecom", weight: 0.35, target: 100.0, isMain: false },
+                { suffix: "Incidentes Não Críticos de TI e Telecom", weight: 0.35, target: 98.0, isMain: false },
+                { suffix: "Requisições de TI e Telecom", weight: 0.30, target: 98.0, isMain: false }
+            ]},
+            { type: 'Suprimentos', color: 'bg-orange-100', items: [
+                { suffix: "", weight: 1, target: 95.0, isMain: true },
+                { suffix: "Atendimentos SN", weight: 0.3, target: 95.0, isMain: false },
+                { suffix: "Atendimentos Coupa", weight: 0.3, target: 95.0, isMain: false },
+                { suffix: "Eficiência", weight: 0.4, target: 95.0, isMain: false }
+            ]},
+            { type: 'Facilities', color: 'bg-yellow-100', items: [
+                { suffix: "", weight: 1, target: 95.0, isMain: true },
+                { suffix: "Manutenção", weight: 0.5, target: 95.0, isMain: false },
+                { suffix: "Limpeza", weight: 0.3, target: 95.0, isMain: false },
+                { suffix: "Frota", weight: 0.2, target: 95.0, isMain: false }
+            ]},
+            { type: 'RH', color: 'bg-purple-100', items: [
+                { suffix: "", weight: 1, target: 95.0, isMain: true },
+                { suffix: "Folha", weight: 0.4, target: 95.0, isMain: false },
+                { suffix: "Benefícios", weight: 0.4, target: 95.0, isMain: false },
+                { suffix: "Ponto", weight: 0.2, target: 95.0, isMain: false }
+            ]},
+             { type: 'Financeiro', color: 'bg-blue-100', items: [
+                { suffix: "", weight: 1, target: 95.0, isMain: true },
+                { suffix: "Contas a Pagar", weight: 0.5, target: 95.0, isMain: false },
+                { suffix: "Contas a Receber", weight: 0.5, target: 95.0, isMain: false }
+            ]},
+             { type: 'Jurídico', color: 'bg-red-100', items: [
+                { suffix: "", weight: 1, target: 95.0, isMain: true },
+                { suffix: "Contratos", weight: 0.5, target: 95.0, isMain: false },
+                { suffix: "Trabalhista", weight: 0.5, target: 95.0, isMain: false }
+            ]}
+          ];
+
+          let data = [];
+          regions.forEach(reg => {
+            structure.forEach(group => {
+              group.items.forEach((item, idx) => {
+                let name = idx === 0 ? `Nível de Serviços CSC ${group.type} - ${reg}` : `Resultado Super. ${group.type} ${item.suffix} - ${reg}`;
+                data.push({ 
+                    name, target: item.target, weight: item.weight, type: "percent", 
+                    direction: "max", isMain: item.isMain, groupColor: group.color 
+                });
+              });
+            });
+          });
+          return data.map((d, i) => ({ ...d, order: i, months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null })) }));
+        };
+
+        const generateSlaData = () => {
+          const specificSlaList = [
+            "SLA ATENDIMENTO CSC GOV COMPRAS - EQTL ENERGIA", "SLA ATENDIMENTO CSC FROTA - EQTL AL", "SLA ATENDIMENTO CSC IMOVEIS - EQTL AL LESTE",
+            "SLA ATENDIMENTO CSC IMÓVEIS - EQTL AL OESTE", "SLA Atendimento CSC - EQTL Serviços e Telecom - FACILITIES - IMÓVEIS - PG",
+            "SLA Atendimento CSC - EQTL Serviços e Telecom - FACILITIES - FROTA - PG", "SLA Atendimento CSC - EQTL ENERGIA - CADASTRO", "SLA ATENDIMENTO CSC FROTA - EQTL PA"
+          ];
+          return specificSlaList.map((name, i) => ({ 
+            name, target: 95.0, type: "percent", direction: "max", isMain: true, order: i, 
+            months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null })) 
+          }));
+        };
+
+        const generateBacklogData = () => {
+          const backlogList = [
+            "Backlog CSC Operações de TI – EQTL MA", "Backlog CSC Operações de TI – EQTL PA", "Backlog CSC Operações de TI – EQTL PI", "Backlog CSC Operações de TI – EQTL AL",
+            "Backlog CSC Operações de TI – EQTL CEA CSA", "Backlog CSC Operações de TI – EQTL CEEE", "Backlog CSC Operações de TI – EQTL GO DF",
+            "BACKLOG CSC - EQTL ENERGIA - RECEBIMENTO FISCAL", "BACKLOG CSC SISTEMAS CORPORATIVOS – EQTL ENERGIA", "BACKLOG CSC SISTEMAS TÉCNICOS – EQTL ENERGIA",
+            "Backlog CSC Segurança Empresarial – EQTL ENERGIA", "Backlog CSC Imóveis - EQTL AL LESTE", "Backlog CSC Imóveis - EQTL AL OESTE", "Backlog CSC Frota - EQTL AL",
+            "BACKLOG CSC IMÓVEIS FROTA - EQTL CEEE D NORTE", "BACKLOG CSC IMÓVEIS FROTA - EQTL CEEE D SUL", "BACKLOG CSC - EQTL CEACSA - IMÓVEIS + FROTA",
+            "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA CENTRO", "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA LESTE", "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA NOROESTE",
+            "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA NORTE", "BACKLOG CSC - EQTL MA - IMÓVEIS + FROTA SUL", "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA CENTRO",
+            "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA NORDESTE", "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA NORTE", "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA OESTE",
+            "BACKLOG CSC - EQTL PA - IMÓVEIS + FROTA SUL", "BACKLOG CSC - EQTL PI - IMÓVEIS + FROTA FLORIANO", "BACKLOG CSC - EQTL PI - IMÓVEIS + FROTA METROPOLITANA",
+            "BACKLOG CSC - EQTL PI - IMÓVEIS + FROTA PARNAÍBA", "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA CENTRO", "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA NOROESTE",
+            "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA NORTE", "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA SUDOESTE", "BACKLOG CSC - EQTL GO - IMÓVEIS + FROTA SUL",
+            "Backlog CSC - EQTL ENERGIA Sistemas", "Backlog CSC - EQTL ENERGIA - Benefícios", "BACKLOG CSC - EQTL ENERGIA - FOLHA E BENEFÍCIOS"
+          ];
+          return backlogList.map((name, i) => ({ 
+            name, target: 20, type: "number", direction: "min", isMain: true, order: i, 
+            months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null })) 
+          }));
+        };
+
+        // ==========================================
+        // 4. COMPONENTES AUXILIARES
+        // ==========================================
+        const IndicatorChartModal = ({ indicator, onClose }) => {
+          if (!indicator) return null;
+          const chartData = indicator.months.map((m, idx) => ({ name: MONTHS[idx], real: m.real || 0, acum: m.acum || 0 }));
+          const barColor = "#3b82f6"; const lineColor = "#10b981";
+          const width = 600; const height = 300; const padding = 40; const graphWidth = width - padding * 2; const graphHeight = height - padding * 2; const maxY = Math.max(100, ...chartData.map(d => d.real)) || 100;
+          const getX = (index) => padding + (index * (graphWidth / (chartData.length - 1 || 1)));
+          const getY = (val) => height - padding - ((val / maxY) * graphHeight);
+          const linePath = chartData.reduce((acc, point, i) => {
+            const x = getX(i); const y = getY(point.acum); return i === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`;
+          }, "");
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl relative">
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100">
+                    <i className="fas fa-times w-5 h-5 flex items-center justify-center"></i>
+                </button>
+                <h3 className="text-lg font-bold text-gray-800 mb-1 pr-8 truncate">{indicator.name}</h3>
+                <div className="flex gap-4 text-xs text-gray-500 mb-6">
+                  <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded-sm"></div> Real Mensal</span>
+                  <span className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded-full h-[3px]"></div> Acumulado Anual</span>
+                  <span>Meta: {indicator.target}{indicator.type === 'percent' ? '%' : ''}</span>
+                </div>
+                <div className="flex justify-center">
+                  <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
+                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1" />
+                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1" />
+                    {[0, maxY/2, maxY].map(val => (
+                      <g key={val}><line x1={padding} y1={getY(val)} x2={width - padding} y2={getY(val)} stroke="#f3f4f6" strokeDasharray="4" /><text x={padding - 10} y={getY(val) + 4} textAnchor="end" fontSize="10" fill="#9ca3af">{Math.round(val)}</text></g>
+                    ))}
+                    {chartData.map((d, i) => {
+                      const barH = ((d.real / maxY) * graphHeight);
+                      return (<g key={i}><rect x={getX(i) - 10} y={getY(d.real)} width={20} height={barH} fill={barColor} opacity="0.8" rx="2"/><text x={getX(i)} y={height - padding + 15} textAnchor="middle" fontSize="10" fill="#6b7280">{d.name}</text></g>)
+                    })}
+                    <path d={linePath} fill="none" stroke={lineColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    {chartData.map((d, i) => (<circle key={i} cx={getX(i)} cy={getY(d.acum)} r="4" fill="white" stroke={lineColor} strokeWidth="2" />))}
+                  </svg>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // ==========================================
+        // 5. MÓDULOS PRINCIPAIS
+        // ==========================================
+        const ProjectsModule = ({ user }) => {
+          const [projects, setProjects] = useState([]);
+          const [filter, setFilter] = useState('Todos');
+          const [loading, setLoading] = useState(true);
+          const [deleteId, setDeleteId] = useState(null);
+          const fileInputRef = useRef(null);
+          
+          const [colWidths, setColWidths] = useState(() => JSON.parse(localStorage.getItem('govProjectsColWidths')) || { process: 200, action: 300, owner: 150, area: 150, criticality: 120, status: 140, dates: 160, sla: 80, remaining: 100, notes: 250, actions: 50 });
+          const [rowDensity, setRowDensity] = useState(() => localStorage.getItem('govProjectsRowDensity') || 'normal');
+          const [resizingCol, setResizingCol] = useState(null);
+          const resizeStartX = useRef(null);
+
+          useEffect(() => localStorage.setItem('govProjectsColWidths', JSON.stringify(colWidths)), [colWidths]);
+          useEffect(() => localStorage.setItem('govProjectsRowDensity', rowDensity), [rowDensity]);
+
+          useEffect(() => {
+            if (!user) return;
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'gov_projects'), orderBy('displayId'));
+            return onSnapshot(q, async (snapshot) => {
+              if (snapshot.empty) {
+                const batch = writeBatch(db);
+                const initialProjectsTemplate = [
+                  { displayId: 1, process: "Gestão de Nível de Serviço", action: "Padronização das áreas referentes aos SLA's", owner: "A definir", area: "Governança CSC", criticality: "Alta", status: "Não Iniciado", startDate: "", endDate: "", sla: 30, notes: "Definir catálogo de serviços padrão." },
+                  { displayId: 2, process: "Monitoramento e Qualidade", action: "Automatizar apuração da aderência de monitoramento", owner: "A definir", area: "Governança CSC", criticality: "Média", status: "Não Iniciado", startDate: "", endDate: "", sla: 45, notes: "Atualmente feito de forma manual." },
+                ];
+                initialProjectsTemplate.forEach(p => batch.set(doc(collection(db, 'artifacts', appId, 'public', 'data', 'gov_projects')), p));
+                await batch.commit(); return;
+              }
+              setProjects(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
+              setLoading(false);
+            });
+          }, [user]);
+
+          const updateField = (id, field, val) => user && updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_projects', id), { [field]: val });
+          const addProject = () => user && addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'gov_projects'), { displayId: Date.now(), process: "Novo", action: "", owner: "", area: "", criticality: "Baixa", status: "Não Iniciado", startDate: "", endDate: "", sla: 0, notes: "" });
+          const confirmDelete = () => user && deleteId && deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_projects', deleteId)).then(() => setDeleteId(null));
+          
+          useEffect(() => {
+            const move = (e) => resizingCol && setColWidths(p => ({ ...p, [resizingCol]: Math.max(50, p[resizingCol] + (e.pageX - resizeStartX.current)) }));
+            const up = () => { setResizingCol(null); resizeStartX.current = null; };
+            if (resizingCol) { window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); }
+            return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+          }, [resizingCol]);
+
+          const startResize = (e, col) => { e.preventDefault(); setResizingCol(col); resizeStartX.current = e.pageX; };
+          const ResizableHeader = ({ label, colKey }) => (
+            <th className="px-4 py-3 relative bg-white/90 text-gray-700 uppercase font-bold text-xs border-b border-gray-200 select-none group" style={{ width: colWidths[colKey] }}>
+              <span className="truncate block">{label}</span>
+              <div className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 group-hover:bg-gray-300 transition-colors" onMouseDown={(e) => startResize(e, colKey)} />
+            </th>
+          );
+
+          const getDays = (date) => date ? Math.ceil((new Date(date) - new Date()) / 86400000) : null;
+          const filtered = filter === 'Todos' ? projects : projects.filter(p => p.status === filter);
+          const pad = rowDensity === 'compact' ? 'py-1' : rowDensity === 'spacious' ? 'py-4' : 'py-2';
+
+          const exportToCSV = () => {
+            const headers = ["Processo", "Ação", "Dono", "Área", "Criticidade", "Status", "Data Início", "Data Fim", "SLA", "Observações"];
+            const rows = projects.map(p => [p.process, p.action, p.owner, p.area, p.criticality, p.status, p.startDate, p.endDate, p.sla, p.notes].map(f => `"${f || ''}"`).join(","));
+            const blob = new Blob(["\uFEFF" + [headers.join(","), ...rows].join("\n")], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `Projetos_Gov_CSC_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+          };
+
+          const importFromCSV = (e) => {
+            const file = e.target.files[0];
+            if (!file || !user) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+              const lines = e.target.result.split(/\r\n|\n/).filter(l => l.trim());
+              if (lines.length < 2) return;
+              const batch = writeBatch(db);
+              for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+                if (cols.length < 5) continue;
+                batch.set(doc(collection(db, 'artifacts', appId, 'public', 'data', 'gov_projects')), {
+                  displayId: Date.now() + i, process: cols[0], action: cols[1], owner: cols[2], area: cols[3], criticality: cols[4] || "Baixa", status: cols[5] || "Não Iniciado", startDate: cols[6], endDate: cols[7], sla: Number(cols[8]) || 0, notes: cols[9]
+                });
+              }
+              await batch.commit();
+              alert("Dados importados com sucesso!");
+            };
+            reader.readAsText(file);
+          };
+
+          const handleEmailAlert = () => {
+            const critical = projects.filter(p => {
+              const d = getDays(p.endDate);
+              return (d !== null && d <= 5 && p.status !== 'Concluído') || p.status === 'Atrasado';
+            });
+            if (!critical.length) return alert("Nenhum projeto crítico encontrado.");
+            const body = "Projetos Críticos:\n\n" + critical.map(p => `• ${p.process}: ${p.action} (${p.status})`).join("\n");
+            window.location.href = `mailto:?subject=Alerta Projetos&body=${encodeURIComponent(body)}`;
+          };
+
+          return (
+            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-xl border border-white/40 flex flex-col h-full animate-in fade-in zoom-in duration-300">
+              {deleteId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                  <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-2xl">
+                    <h3 className="font-bold text-lg mb-2 text-gray-800">Excluir Projeto?</h3>
+                    <p className="text-sm text-gray-600 mb-4">Esta ação é irreversível.</p>
+                    <div className="flex justify-end gap-2 mt-4">
+                      <button onClick={() => setDeleteId(null)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors">Cancelar</button>
+                      <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-2"><i className="fas fa-trash"></i> Excluir</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <input type="file" accept=".csv" ref={fileInputRef} onChange={importFromCSV} className="hidden" />
+
+              <div className="p-4 border-b border-gray-200 flex flex-col xl:flex-row justify-between items-center gap-4 bg-white/50">
+                <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                  {['Todos', 'Em Andamento', 'Não Iniciado', 'Concluído'].map(st => (
+                    <button key={st} onClick={() => setFilter(st)} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${filter === st ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>{st}</button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                   <div className="flex bg-gray-100 rounded-lg p-1 mr-2 border border-gray-200">
+                     <button onClick={() => setRowDensity('compact')} className={`p-1.5 rounded transition-colors ${rowDensity==='compact'?'bg-white shadow text-blue-600':'text-gray-400 hover:text-gray-600'}`} title="Compacto"><i className="fas fa-align-justify"></i></button>
+                     <button onClick={() => setRowDensity('normal')} className={`p-1.5 rounded transition-colors ${rowDensity==='normal'?'bg-white shadow text-blue-600':'text-gray-400 hover:text-gray-600'}`} title="Normal"><i className="fas fa-align-center"></i></button>
+                     <button onClick={() => setRowDensity('spacious')} className={`p-1.5 rounded transition-colors ${rowDensity==='spacious'?'bg-white shadow text-blue-600':'text-gray-400 hover:text-gray-600'}`} title="Amplo"><i className="fas fa-arrows-alt-v"></i></button>
+                   </div>
+                   <button onClick={addProject} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"><i className="fas fa-plus"></i> Novo</button>
+                   <button onClick={exportToCSV} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"><i className="fas fa-download"></i> Exportar</button>
+                   <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"><i className="fas fa-upload"></i> Importar</button>
+                   <button onClick={handleEmailAlert} className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-100 transition-colors shadow-sm"><i className="fas fa-envelope"></i> Alerta</button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto">
+                <table className="min-w-full text-sm text-left table-fixed">
+                  <thead className="sticky top-0 z-10 shadow-sm bg-gray-50">
+                    <tr>
+                      <ResizableHeader label="Processo" colKey="process" />
+                      <ResizableHeader label="Ação / Projeto" colKey="action" />
+                      <ResizableHeader label="Dono" colKey="owner" />
+                      <ResizableHeader label="Área" colKey="area" />
+                      <ResizableHeader label="Criticidade" colKey="criticality" />
+                      <ResizableHeader label="Status" colKey="status" />
+                      <ResizableHeader label="Datas" colKey="dates" />
+                      <ResizableHeader label="SLA (dias)" colKey="sla" />
+                      <ResizableHeader label="Restante" colKey="remaining" />
+                      <ResizableHeader label="Observações" colKey="notes" />
+                      <th className="w-[50px] bg-white/90 border-b border-gray-200"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white/50">
+                    {loading ? <tr><td colSpan="11" className="p-10 text-center"><i className="fas fa-spinner fa-spin text-blue-500 text-3xl"></i></td></tr> : filtered.map(p => {
+                      const d = getDays(p.endDate);
+                      const color = d === null ? 'text-gray-400' : d < 0 ? 'text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-full' : d < 5 ? 'text-amber-600 font-bold' : 'text-green-600 font-bold';
+                      return (
+                        <tr key={p.id} className="hover:bg-blue-50/50 transition-colors group">
+                          <td className={`px-4 ${pad}`}><textarea value={p.process} onChange={e=>updateField(p.id,'process',e.target.value)} className="w-full bg-transparent resize-none focus:bg-white focus:shadow-sm focus:ring-1 focus:ring-blue-200 rounded p-1 text-gray-700 font-medium" rows={rowDensity === 'compact' ? 1 : 2}/></td>
+                          <td className={`px-4 ${pad}`}><textarea value={p.action} onChange={e=>updateField(p.id,'action',e.target.value)} className="w-full bg-transparent resize-none focus:bg-white focus:shadow-sm focus:ring-1 focus:ring-blue-200 rounded p-1 text-gray-600" rows={rowDensity === 'compact' ? 1 : 2}/></td>
+                          <td className={`px-4 ${pad}`}><input value={p.owner} onChange={e=>updateField(p.id,'owner',e.target.value)} className="w-full bg-transparent focus:bg-white focus:shadow-sm focus:ring-1 focus:ring-blue-200 rounded p-1 text-gray-600"/></td>
+                          <td className={`px-4 ${pad}`}><input value={p.area} onChange={e=>updateField(p.id,'area',e.target.value)} className="w-full bg-transparent focus:bg-white focus:shadow-sm focus:ring-1 focus:ring-blue-200 rounded p-1 text-gray-600"/></td>
+                          <td className={`px-4 ${pad}`}>
+                            <select value={p.criticality} onChange={e=>updateField(p.id,'criticality',e.target.value)} className={`bg-transparent w-full text-xs font-semibold rounded p-1 ${p.criticality==='Alta'?'text-red-700 bg-red-50':p.criticality==='Média'?'text-amber-700 bg-amber-50':'text-green-700 bg-green-50'}`}>
+                              <option value="Alta">Alta</option><option value="Média">Média</option><option value="Baixa">Baixa</option>
+                            </select>
+                          </td>
+                          <td className={`px-4 ${pad}`}>
+                            <select value={p.status} onChange={e=>updateField(p.id,'status',e.target.value)} className="bg-transparent w-full text-xs rounded p-1 border border-transparent focus:border-blue-300 focus:bg-white"><option>Não Iniciado</option><option>Planejado</option><option>Em Andamento</option><option>Atrasado</option><option>Concluído</option></select>
+                          </td>
+                          <td className={`px-4 ${pad}`}>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-6">Ini:</span><input type="date" value={p.startDate} onChange={e=>updateField(p.id,'startDate',e.target.value)} className="bg-transparent text-gray-600 font-medium focus:outline-none"/></div>
+                              <div className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-6">Fim:</span><input type="date" value={p.endDate} onChange={e=>updateField(p.id,'endDate',e.target.value)} className="bg-transparent text-gray-800 font-bold focus:outline-none"/></div>
+                            </div>
+                          </td>
+                          <td className={`px-4 ${pad} text-center`}><input type="number" value={p.sla} onChange={e=>updateField(p.id,'sla',e.target.value)} className="w-12 text-center bg-transparent border-b border-gray-100 hover:border-gray-300 focus:border-blue-500 focus:outline-none"/></td>
+                          <td className={`px-4 ${pad} text-center text-xs`}><span className={color}>{d !== null ? `${d} d` : '-'}</span></td>
+                          <td className={`px-4 ${pad}`}><textarea value={p.notes} onChange={e=>updateField(p.id,'notes',e.target.value)} className="w-full bg-transparent resize-none focus:bg-white focus:shadow-sm focus:ring-1 focus:ring-blue-200 rounded p-1 text-xs text-gray-500" rows={rowDensity === 'compact' ? 1 : 2} placeholder="Obs..."/></td>
+                          <td className={`px-4 ${pad} text-center`}><button onClick={()=>setDeleteId(p.id)} className="text-gray-300 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50"><i className="fas fa-trash"></i></button></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        }
+
+        const DirectorateSummaryTable = ({ user }) => {
+          const [summaryData, setSummaryData] = useState([]);
+          const [loading, setLoading] = useState(true);
+          const [searchTerm, setSearchTerm] = useState("");
+          const [colWidths, setColWidths] = useState(() => JSON.parse(localStorage.getItem('dirSummaryColWidths')) || { 
+            name: 350, ...MONTHS.reduce((acc, m) => ({...acc, [m]: 160}), {}) 
+          });
+          const [resizingCol, setResizingCol] = useState(null);
+          const resizeStartX = useRef(null);
+          useEffect(() => localStorage.setItem('dirSummaryColWidths', JSON.stringify(colWidths)), [colWidths]);
+
+          useEffect(() => {
+            if (!user) return;
+            const fetchAllData = async () => {
+              try {
+                const collections = ['dir_result_nivel_servico_v3_fixed', 'dir_sla_specific_v2_clean', 'dir_backlog_v1_fixed'];
+                const dataMap = new Map();
+                
+                for (const colName of collections) {
+                  const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', colName));
+                  snapshot.forEach(doc => {
+                    const data = doc.data();
+                    dataMap.set(data.name.toUpperCase().trim(), data);
+                  });
+                }
+                
+                const mergedData = RT_GOV_ITEMS.map((name, index) => {
+                  const source = dataMap.get(name.toUpperCase().trim());
+                  if (source) {
+                    return { ...source, name: name, order: index }; 
+                  } else {
+                     return {
+                        name: name,
+                        target: 95.0, type: "percent", direction: "max", weight: 1, order: index,
+                        months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null }))
+                     };
+                  }
+                });
+                setSummaryData(mergedData);
+                setLoading(false);
+              } catch (err) {
+                console.error("Error fetching summary data", err);
+                setLoading(false);
+              }
+            };
+            fetchAllData();
+          }, [user]);
+
+          useEffect(() => {
+            const move = (e) => resizingCol && setColWidths(p => ({ ...p, [resizingCol]: Math.max(50, p[resizingCol] + (e.pageX - resizeStartX.current)) }));
+            const up = () => { setResizingCol(null); resizeStartX.current = null; };
+            if (resizingCol) { window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); }
+            return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+          }, [resizingCol]);
+
+          const startResize = (e, col) => { e.preventDefault(); setResizingCol(col); resizeStartX.current = e.pageX; };
+          const ResizableHeader = ({ label, colKey, className }) => (
+            <th className={`p-2 text-center font-bold border-b border-r border-gray-300 relative select-none group ${className}`} style={{ width: colWidths[colKey] }}>
+              <span className="truncate block w-full">{label}</span>
+              <div className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 group-hover:bg-gray-300 transition-colors z-30" onMouseDown={(e) => startResize(e, colKey)} />
+            </th>
+          );
+          
+          const filteredData = summaryData.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+          if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Compilando dados de Governança...</p></div>;
+
+          return (
+            <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+              <div className="p-4 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-clipboard-list text-purple-600"></i> RT Governança 2026</h2>
+                  <p className="text-xs text-gray-500 mt-1">Consolidado ({summaryData.length} Indicadores) | Espelho das Subseções</p>
+                </div>
+                <div className="relative w-64"><i className="fas fa-filter absolute left-3 top-3 text-gray-400"></i><input type="text" placeholder="Filtrar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg"/></div>
+              </div>
+              <div className="flex-1 overflow-auto bg-gray-100 p-4">
+                <div className="bg-white rounded-lg shadow border border-gray-300 overflow-hidden h-full flex flex-col relative">
+                  <div className="overflow-auto flex-1 pb-2">
+                    <table className="min-w-max text-xs border-collapse">
+                      <thead className="bg-gray-200 text-gray-700 sticky top-0 z-20 shadow-md">
+                        <tr>
+                           <th className="p-3 text-left font-bold border-b border-gray-300 w-96 sticky left-0 bg-gray-200 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.2)]" style={{ width: colWidths.name }}>
+                            Indicador Consolidado
+                            <div className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 z-40" onMouseDown={(e) => startResize(e, 'name')} />
+                          </th>
+                          {MONTHS.map(m => (
+                            <ResizableHeader key={m} label={
+                              <>
+                                 {m}
+                                 <div className="flex text-[9px] font-normal text-gray-500 mt-1 border-t border-gray-300 pt-1">
+                                   <span className="w-1/4 text-center border-r border-gray-200">F/Pz</span>
+                                   <span className="w-1/4 text-center border-r border-gray-200">T/Tot</span>
+                                   <span className="w-1/4 text-center font-bold text-blue-700 border-r border-gray-200">Real</span>
+                                   <span className="w-1/4 text-center font-bold text-gray-700">Acum</span>
+                                 </div>
+                              </>
+                            } colKey={m} className="min-w-[160px] bg-gray-100" />
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {filteredData.map((ind, idx) => (
+                           <tr key={idx} className={`hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                              <td className="p-2 border-r border-gray-200 sticky left-0 z-10 bg-inherit font-medium text-gray-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] truncate max-w-xs" title={ind.name}>{ind.name}</td>
+                              {ind.months.map((m, mIdx) => {
+                                 let realBg = "bg-gray-50 text-gray-300"; let realText = "-";
+                                 if (m.real !== null) { 
+                                   const hit = ind.direction === 'min' ? m.real <= ind.target : m.real >= ind.target;
+                                   realBg = hit ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"; 
+                                   realText = m.real + (ind.type === 'percent' ? '%' : ''); 
+                                 }
+                                 let acumBg = "bg-gray-100 text-gray-300"; let acumText = "-";
+                                 if (m.acum !== null) {
+                                    const hit = ind.direction === 'min' ? m.acum <= ind.target : m.acum >= ind.target;
+                                    acumBg = hit ? "bg-green-200 text-green-900" : "bg-red-200 text-red-900";
+                                    acumText = m.acum + (ind.type === 'percent' ? '%' : '');
+                                 }
+                                 return (
+                                    <td key={mIdx} className="p-0 border-r border-gray-200 min-w-[160px]">
+                                       <div className="flex items-stretch h-8">
+                                          <div className="w-1/4 flex items-center justify-center text-[10px] border-r border-gray-100 bg-white text-gray-400">{m.falseVal ?? '-'}</div>
+                                          <div className="w-1/4 flex items-center justify-center text-[10px] border-r border-gray-100 bg-white text-gray-400">{m.trueVal ?? '-'}</div>
+                                          <div className={`w-1/4 flex items-center justify-center text-[9px] font-bold border-r border-white ${realBg}`}>{realText}</div>
+                                          <div className={`w-1/4 flex items-center justify-center text-[9px] font-bold ${acumBg}`}>{acumText}</div>
+                                       </div>
+                                    </td>
+                                 )
+                              })}
+                           </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white border-t border-gray-200 p-2 px-4 text-xs text-gray-500 italic">
+                * Esta tabela espelha automaticamente os dados das abas "Result. Nível Serviço", "Painel SLA" e "Backlog". Para editar, acesse a aba de origem.
+              </div>
+            </div>
+          );
+        };
+
+        const DynamicTable = ({ user, collectionName, title, subtitle, generator, showWeight = true, inputLabels = { f: "F (Ok)", t: "T (Nok)" }, calculationType = "sla", headerColor = "bg-gray-200" }) => {
+          const [indicators, setIndicators] = useState([]);
+          const [loading, setLoading] = useState(true);
+          const [searchTerm, setSearchTerm] = useState("");
+          const [selectedIndicator, setSelectedIndicator] = useState(null);
+          const fileInputRef = useRef(null);
+          
+          const [colWidths, setColWidths] = useState(() => JSON.parse(localStorage.getItem(`cols_${collectionName}`)) || { 
+            name: 350, weight: 60, ...MONTHS.reduce((acc, m) => ({...acc, [m]: 160}), {}) 
+          });
+          const [rowDensity, setRowDensity] = useState('normal');
+          const [resizingCol, setResizingCol] = useState(null);
+          const resizeStartX = useRef(null);
+
+          useEffect(() => localStorage.setItem(`cols_${collectionName}`, JSON.stringify(colWidths)), [colWidths]);
+
+          useEffect(() => {
+            if (!user) return;
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', collectionName), orderBy('order'));
+            const unsubscribe = onSnapshot(q, async (snapshot) => {
+              if (snapshot.empty) {
+                const initialData = generator();
+                const batch = writeBatch(db);
+                initialData.forEach((ind) => {
+                  const docRef = doc(collection(db, 'artifacts', appId, 'public', 'data', collectionName));
+                  batch.set(docRef, ind);
+                });
+                await batch.commit(); return;
+              }
+              setIndicators(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
+              setLoading(false);
+            });
+            return () => unsubscribe();
+          }, [user, collectionName]);
+
+          const updateIndicatorMeta = async (indId, field, value) => {
+            if (!user) return;
+            const indIndex = indicators.findIndex(i => i.id === indId);
+            const updatedInd = { ...indicators[indIndex], [field]: value };
+            const newIndicators = [...indicators]; newIndicators[indIndex] = updatedInd; setIndicators(newIndicators);
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', collectionName, indId), { [field]: value });
+          };
+
+          const updateValues = async (indId, monthIdx, field, value) => {
+            if (!user) return;
+            const indIndex = indicators.findIndex(i => i.id === indId);
+            const ind = indicators[indIndex];
+            const newMonths = [...ind.months];
+            
+            const numVal = value === '' ? null : parseFloat(value); 
+            newMonths[monthIdx][field] = numVal;
+
+            if (calculationType === "backlog") {
+               const total = newMonths[monthIdx].trueVal;
+               newMonths[monthIdx].real = total !== null ? total : 0;
+            } else {
+               const f = newMonths[monthIdx].falseVal; 
+               const t = newMonths[monthIdx].trueVal;  
+               if (f !== null && t !== null) {
+                 const total = f + t;
+                 newMonths[monthIdx].real = total > 0 ? parseFloat(((f / total) * 100).toFixed(2)) : 0;
+               } else if (f !== null && t === null) { newMonths[monthIdx].real = 100.00; } else if (t !== null && f === null) { newMonths[monthIdx].real = 0.00; }
+            }
+
+            let sum = 0, count = 0;
+            for (let i = 0; i <= 11; i++) { 
+               if (newMonths[i].real !== null && !isNaN(newMonths[i].real)) { sum += newMonths[i].real; count++; }
+            }
+            newMonths[monthIdx].acum = count > 0 ? parseFloat((sum / count).toFixed(2)) : null;
+
+            const newIndicators = [...indicators]; newIndicators[indIndex] = { ...ind, months: newMonths }; setIndicators(newIndicators);
+            
+            if (collectionName === "dir_result_nivel_servico_v3_fixed") {
+                if (!ind.isMain) {
+                    let parentIndex = -1;
+                    for(let i = indIndex; i >= 0; i--) {
+                        if (indicators[i].isMain) {
+                            parentIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    if (parentIndex !== -1) {
+                        const parent = indicators[parentIndex];
+                        const children = [];
+                        for(let i = parentIndex + 1; i < indicators.length; i++) {
+                            if (indicators[i].isMain) break;
+                            children.push(i === indIndex ? { ...ind, months: newMonths } : indicators[i]); 
+                        }
+                        
+                        const parentMonths = [...parent.months];
+                        for(let m = 0; m < 12; m++) {
+                            let sumF = 0;
+                            let sumT = 0;
+                            let hasData = false;
+                            
+                            children.forEach(child => {
+                                const childM = child.months[m];
+                                if (childM.falseVal !== null && childM.trueVal !== null) {
+                                    sumF += childM.falseVal;
+                                    sumT += childM.trueVal;
+                                    hasData = true;
+                                }
+                            });
+                            
+                            if (hasData) {
+                                parentMonths[m].falseVal = sumF;
+                                parentMonths[m].trueVal = sumT;
+                                const total = sumF + sumT;
+                                parentMonths[m].real = total > 0 ? parseFloat(((sumF / total) * 100).toFixed(2)) : 0;
+                            } 
+                        }
+                        newIndicators[parentIndex] = { ...parent, months: parentMonths };
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', collectionName, parent.id), { months: parentMonths });
+                    }
+                }
+            }
+
+            setIndicators(newIndicators);
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', collectionName, indId), { months: newMonths });
+          };
+
+          const addIndicator = async () => {
+            if (!user) return;
+            const newOrder = indicators.length > 0 ? Math.max(...indicators.map(i => i.order || 0)) + 1 : 0;
+            const newInd = {
+              name: "Novo Indicador",
+              target: 95.0, weight: 1, type: "percent", direction: "max", isMain: false, order: newOrder,
+              months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null }))
+            };
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', collectionName), newInd);
+          };
+
+          const deleteIndicator = async (id) => {
+            if (!user || !confirm("Deseja excluir este indicador?")) return;
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', collectionName, id));
+          };
+
+          const filteredIndicators = indicators.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+          useEffect(() => {
+            const move = (e) => resizingCol && setColWidths(p => ({ ...p, [resizingCol]: Math.max(50, p[resizingCol] + (e.pageX - resizeStartX.current)) }));
+            const up = () => { setResizingCol(null); resizeStartX.current = null; };
+            if (resizingCol) { window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); }
+            return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+          }, [resizingCol]);
+
+          const startResize = (e, col) => { e.preventDefault(); setResizingCol(col); resizeStartX.current = e.pageX; };
+          const ResizableHeader = ({ label, colKey, className }) => (
+            <th className={`p-2 text-center font-bold border-b border-r border-gray-300 relative select-none group ${className}`} style={{ width: colWidths[colKey] }}>
+              <span className="truncate block w-full">{label}</span>
+              <div className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 group-hover:bg-gray-300 transition-colors z-30" onMouseDown={(e) => startResize(e, colKey)} />
+            </th>
+          );
+
+          const pad = rowDensity === 'compact' ? 'py-1' : rowDensity === 'spacious' ? 'py-3' : 'py-2';
+
+          if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando {title}...</p></div>;
+
+          return (
+            <div className={`backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative ${collectionName.includes('gov') ? 'bg-blue-50/90' : 'bg-white/95'}`}>
+              {selectedIndicator && <IndicatorChartModal indicator={selectedIndicator} onClose={() => setSelectedIndicator(null)} />}
+              
+              <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-wave-square text-blue-600"></i> {title}</h2>
+                  <p className="text-xs text-gray-500 mt-1">{subtitle} ({indicators.length} Indicadores)</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button onClick={addIndicator} className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 shadow text-xs font-medium"><i className="fas fa-plus"></i> Adicionar</button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto bg-gray-100 p-4">
+                <div className="bg-white rounded-lg shadow border border-gray-300 overflow-hidden h-full flex flex-col relative">
+                  <div className="overflow-auto flex-1 pb-2"> 
+                    <table className="min-w-max text-xs border-collapse">
+                      <thead className={`${headerColor} text-gray-700 sticky top-0 z-20 shadow-md`}>
+                        <tr>
+                          <th className="p-3 text-left font-bold border-b border-gray-300 w-96 sticky left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.2)] bg-inherit" style={{ width: colWidths.name }}>
+                            Indicador
+                            <div className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 z-40" onMouseDown={(e) => startResize(e, 'name')} />
+                          </th>
+                          {showWeight && <ResizableHeader label="Peso" colKey="weight" className="w-14 bg-inherit" />}
+                          {MONTHS.map(m => (
+                            <ResizableHeader key={m} label={
+                              <>
+                                {m}
+                                <div className="flex text-[9px] font-normal text-gray-500 mt-1 border-t border-gray-300 pt-1">
+                                  <span className="w-1/4 text-center border-r border-gray-200" title={inputLabels.f}>{inputLabels.f.split(' ')[0]}</span>
+                                  <span className="w-1/4 text-center border-r border-gray-200" title={inputLabels.t}>{inputLabels.t.split(' ')[0]}</span>
+                                  <span className="w-1/4 text-center font-bold text-blue-700 border-r border-gray-200">%Real</span>
+                                  <span className="w-1/4 text-center font-bold text-gray-700">%Acum</span>
+                                </div>
+                              </>
+                            } colKey={m} className="min-w-[160px] bg-inherit" />
+                          ))}
+                          <th className="w-10 bg-inherit border-b border-gray-300"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {filteredIndicators.map((ind, idx) => (
+                          <tr key={ind.id} className={`hover:bg-blue-50 transition-colors ${ind.groupColor ? ind.groupColor : 'bg-white'}`}>
+                            <td className={`p-0 border-r border-gray-200 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] truncate max-w-xs ${ind.groupColor ? ind.groupColor : 'bg-white'}`} title={ind.name}>
+                              <input type="text" value={ind.name} onChange={(e) => updateIndicatorMeta(ind.id, 'name', e.target.value)} className="w-full h-full px-2 py-1 bg-transparent border-none focus:ring-0 truncate cursor-text font-medium"/>
+                            </td>
+                            {showWeight && <td className="p-0 border-r border-gray-200"><input type="number" value={ind.weight} onChange={(e)=>updateIndicatorMeta(ind.id,'weight',e.target.value)} className="w-full text-center border-none focus:ring-0 bg-transparent"/></td>}
+                            {ind.months.map((m, mIdx) => {
+                               let realBg = "text-gray-300";
+                               if (m.real !== null) realBg = m.real >= ind.target ? "bg-green-100 text-green-700 font-bold" : "bg-red-100 text-red-700 font-bold";
+                               
+                               const isReadOnly = ind.isMain;
+
+                               return (
+                                  <td key={mIdx} className="p-0 border-r border-gray-200 min-w-[160px]">
+                                    <div className={`flex items-stretch ${rowDensity === 'compact' ? 'h-6' : rowDensity === 'spacious' ? 'h-10' : 'h-8'}`}>
+                                       <input 
+                                         type="number" 
+                                         value={m.falseVal ?? ''} 
+                                         readOnly={isReadOnly}
+                                         onChange={(e)=>!isReadOnly && updateValues(ind.id, mIdx, 'falseVal', e.target.value)} 
+                                         className={`w-1/4 text-center text-[10px] border-r border-gray-100 focus:outline-none p-0 m-0 ${isReadOnly ? 'bg-transparent text-gray-500' : 'bg-white hover:bg-gray-50'}`}
+                                       />
+                                       <input 
+                                         type="number" 
+                                         value={m.trueVal ?? ''} 
+                                         readOnly={isReadOnly}
+                                         onChange={(e)=>!isReadOnly && updateValues(ind.id, mIdx, 'trueVal', e.target.value)} 
+                                         className={`w-1/4 text-center text-[10px] border-r border-gray-100 focus:outline-none p-0 m-0 ${isReadOnly ? 'bg-transparent text-gray-500' : 'bg-white hover:bg-gray-50'}`}
+                                       />
+                                       <div className={`w-1/4 flex items-center justify-center text-[9px] border-r border-white ${realBg}`}>{m.real ?? '-'}</div>
+                                       <div className={`w-1/4 flex items-center justify-center text-[9px] font-bold bg-transparent`}>{m.acum ?? '-'}</div>
+                                    </div>
+                                  </td>
+                               );
+                            })}
+                              <td className="p-0 text-center">
+                              <button onClick={() => deleteIndicator(ind.id)} className="text-gray-300 hover:text-red-500 p-1"><i className="fas fa-trash text-xs"></i></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const DirectorateContainer = ({ user }) => {
+          const [activeSubTab, setActiveSubTab] = useState('result_nivel');
+
+          return (
+            <div className="flex flex-col h-full gap-4">
+              <div className="flex gap-2 bg-white/50 p-1 rounded-lg w-fit backdrop-blur-sm overflow-x-auto">
+                <button onClick={() => setActiveSubTab('result_nivel')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'result_nivel' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/50'}`}>
+                  <i className="fas fa-wave-square"></i> Result. Nível Serviço
+                </button>
+                <button onClick={() => setActiveSubTab('sla')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'sla' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/50'}`}>
+                  <i className="fas fa-bullseye"></i> Painel SLA
+                </button>
+                <button onClick={() => setActiveSubTab('backlog')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'backlog' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/50'}`}>
+                  <i className="fas fa-layer-group"></i> Backlog
+                </button>
+                <button onClick={() => setActiveSubTab('rt_gov')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'rt_gov' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/50'}`}>
+                  <i className="fas fa-clipboard-list"></i> RT Governança 2026
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-hidden">
+                {activeSubTab === 'result_nivel' && (
+                  <DynamicTable 
+                    user={user} 
+                    collectionName="dir_result_nivel_servico_v3_fixed" 
+                    title="Result. Nível Serviço" 
+                    subtitle="Visão Executiva de Indicadores" 
+                    generator={generateServiceLevelData}
+                    showWeight={true}
+                  />
+                )}
+                {activeSubTab === 'sla' && (
+                  <DynamicTable 
+                    user={user} 
+                    collectionName="dir_sla_specific_v2_clean" 
+                    title="Painel SLA" 
+                    subtitle="Acordo de Nível de Serviço (SLA) - Específico" 
+                    generator={generateSlaData}
+                    showWeight={false}
+                  />
+                )}
+                {activeSubTab === 'backlog' && (
+                  <DynamicTable 
+                    user={user} 
+                    collectionName="dir_backlog_v1_fixed" 
+                    title="Backlog" 
+                    subtitle="Volume de Chamados Pendentes" 
+                    generator={generateBacklogData}
+                    showWeight={false}
+                    inputLabels={{ f: "Fora Pz", t: "Total" }}
+                    calculationType="backlog"
+                  />
+                )}
+                {activeSubTab === 'rt_gov' && (
+                  <DirectorateSummaryTable user={user} />
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        const KanbanModule = ({ user }) => {
+          const [tasks, setTasks] = useState([]);
+          const [loading, setLoading] = useState(true);
+          const [newTaskCol, setNewTaskCol] = useState(null);
+          const [newTaskText, setNewTaskText] = useState("");
+          const columns = ["A Iniciar", "Em execução", "Impedimento", "Finalizado"];
+
+          useEffect(() => {
+            if (!user) return;
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'kanban_board_tasks'), orderBy('createdAt', 'asc'));
+            const unsubscribe = onSnapshot(q, (snapshot) => {
+              setTasks(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+              setLoading(false);
+            });
+            return () => unsubscribe();
+          }, [user]);
+
+          const onDragStart = (e, taskId) => {
+            e.dataTransfer.setData('taskId', taskId);
+          };
+
+          const onDrop = async (e, newStatus) => {
+            e.preventDefault();
+            const taskId = e.dataTransfer.getData('taskId');
+            if (!taskId || !user) return;
+            try {
+               await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'kanban_board_tasks', taskId), { status: newStatus });
+            } catch (err) {
+               console.error("Erro ao mover tarefa", err);
+            }
+          };
+
+          const saveNewTask = async (status) => {
+            if (!newTaskText.trim() || !user) return;
+            try {
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'kanban_board_tasks'), {
+                text: newTaskText.trim(),
+                status: status,
+                createdAt: Date.now()
+              });
+              setNewTaskText("");
+              setNewTaskCol(null);
+            } catch (err) {
+              console.error("Erro ao salvar tarefa", err);
+            }
+          };
+
+          const deleteTask = async (taskId) => {
+            if (!user || !confirm("Deseja apagar este cartão?")) return;
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'kanban_board_tasks', taskId));
+          };
+
+          if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando Kanban...</p></div>;
+
+          return (
+            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-xl border border-white/40 flex flex-col h-full animate-in fade-in zoom-in duration-300">
+               <div className="p-4 border-b border-gray-200 bg-white/50 flex justify-between items-center z-20">
+                 <div>
+                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-tasks text-indigo-600"></i> Quadro Kanban</h2>
+                    <p className="text-xs text-gray-500 mt-1">Gerenciamento visual de tarefas gerais</p>
+                 </div>
+               </div>
+               <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+                  <div className="flex gap-6 h-full items-start">
+                     {columns.map(col => {
+                        let topColor = "bg-gray-300";
+                        if(col === "A Iniciar") topColor = "bg-gray-400";
+                        if(col === "Em execução") topColor = "bg-blue-500";
+                        if(col === "Impedimento") topColor = "bg-red-500";
+                        if(col === "Finalizado") topColor = "bg-green-500";
+
+                        return (
+                           <div key={col} className="flex-shrink-0 w-80 bg-gray-100/90 rounded-lg shadow-sm flex flex-col max-h-full border border-gray-200" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, col)}>
+                              <div className={`h-1.5 w-full rounded-t-lg ${topColor}`}></div>
+                              <div className="px-4 py-3 font-bold text-gray-700 flex justify-between items-center">
+                                 {col}
+                                 <span className="bg-white shadow-sm text-gray-600 text-xs px-2 py-0.5 rounded-full border border-gray-200">{tasks.filter(t => t.status === col).length}</span>
+                              </div>
+                              <div className="flex-1 p-3 overflow-y-auto space-y-3">
+                                 {tasks.filter(t => t.status === col).map(task => (
+                                    <div key={task.id} draggable onDragStart={(e) => onDragStart(e, task.id)} className="p-3 bg-white rounded-md shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-indigo-400 relative group transition-all">
+                                       <p className="text-sm text-gray-800 pr-6 break-words whitespace-pre-wrap">{task.text}</p>
+                                       <button onClick={() => deleteTask(task.id)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500 hidden group-hover:block transition-colors" title="Excluir cartão"><i className="fas fa-trash-alt text-xs"></i></button>
+                                    </div>
+                                 ))}
+                                 {newTaskCol === col && (
+                                    <div className="p-3 bg-white rounded-md shadow-sm border border-indigo-300 animate-in fade-in">
+                                       <textarea autoFocus value={newTaskText} onChange={e => setNewTaskText(e.target.value)} className="w-full p-1 border-none outline-none resize-none text-sm text-gray-800 bg-transparent" placeholder="Descreva a tarefa..." rows="2" />
+                                       <div className="flex gap-2 mt-2">
+                                          <button onClick={() => saveNewTask(col)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors">Salvar</button>
+                                          <button onClick={() => {setNewTaskCol(null); setNewTaskText("");}} className="text-gray-500 hover:text-gray-700 px-2 py-1.5 rounded text-xs font-medium transition-colors">Cancelar</button>
+                                       </div>
+                                    </div>
+                                 )}
+                              </div>
+                              {!newTaskCol || newTaskCol !== col ? (
+                                 <div className="p-2 border-t border-gray-200/50">
+                                    <button onClick={() => { setNewTaskCol(col); setNewTaskText(''); }} className="w-full text-left text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-md transition-colors text-sm font-medium flex items-center gap-2"><i className="fas fa-plus"></i> Adicionar cartão</button>
+                                 </div>
+                              ) : null}
+                           </div>
+                        );
+                     })}
+                  </div>
+               </div>
+            </div>
+          );
+        };
+
+        // ==========================================
+        // 6. LAYOUT PRINCIPAL (APP)
+        // ==========================================
+        function PortalCSC() {
+          const [user, setUser] = useState(null);
+          const [activeTab, setActiveTab] = useState('projects'); 
+          const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+          useEffect(() => {
+            const initAuth = async () => {
+              try {
+                await signInAnonymously(auth);
+              } catch(e) {
+                console.error("Auth error:", e);
+              }
+            };
+            initAuth();
+            return onAuthStateChanged(auth, setUser);
+          }, []);
+
+          return (
+            <div className="flex h-screen bg-gray-900 font-sans overflow-hidden">
+              <div className="fixed inset-0 z-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-black opacity-80 z-0" />
+                <img src={BACKGROUND_IMAGE} alt="Background" className="w-full h-full object-cover opacity-40 mix-blend-overlay" onError={(e) => e.target.style.display = 'none'} />
+              </div>
+
+              <div className={`relative z-20 bg-white/95 backdrop-blur shadow-2xl transition-all duration-300 flex flex-col ${isSidebarOpen ? 'w-72' : 'w-20'}`}>
+                <div className="h-24 flex items-center justify-center border-b border-gray-100 relative">
+                  {isSidebarOpen ? (
+                    <div className="flex flex-col items-center">
+                       <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">PORTAL CSC</h1>
+                       <span className="text-[10px] uppercase tracking-widest text-gray-400">Desempenho & Governança</span>
+                    </div>
+                  ) : (
+                    <span className="font-bold text-blue-600 text-2xl">CSC</span>
+                  )}
+                  <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="absolute -right-3 top-10 bg-blue-600 text-white border border-white rounded-full p-1.5 shadow-lg hover:scale-110 transition-transform">
+                    {isSidebarOpen ? <i className="fas fa-chevron-left w-3 h-3 text-[10px] flex items-center justify-center"></i> : <i className="fas fa-bars w-3 h-3 text-[10px] flex items-center justify-center"></i>}
+                  </button>
+                </div>
+
+                <nav className="flex-1 py-6 px-3 space-y-3">
+                  <button onClick={() => setActiveTab('projects')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'projects' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-blue-600'}`}>
+                    <i className={`fas fa-columns text-xl shrink-0 ${activeTab === 'projects' ? 'text-white' : 'text-gray-400 group-hover:text-blue-600'}`}></i>
+                    {isSidebarOpen && <span className="font-medium">Painel de Projetos</span>}
+                  </button>
+
+                  <button onClick={() => setActiveTab('dir')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'dir' ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-emerald-600'}`}>
+                    <i className={`fas fa-chart-pie text-xl shrink-0 ${activeTab === 'dir' ? 'text-white' : 'text-gray-400 group-hover:text-emerald-600'}`}></i>
+                    {isSidebarOpen && <span className="font-medium">Diretoria</span>}
+                  </button>
+
+                  <button onClick={() => setActiveTab('kanban')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'kanban' ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'}`}>
+                    <i className={`fas fa-tasks text-xl shrink-0 ${activeTab === 'kanban' ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'}`}></i>
+                    {isSidebarOpen && <span className="font-medium">Quadro Kanban</span>}
+                  </button>
+                </nav>
+
+                <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+                   {isSidebarOpen ? (
+                     <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 text-white flex items-center justify-center text-sm font-bold shadow-md">CD</div>
+                       <div className="overflow-hidden"><p className="text-sm font-bold text-gray-700 truncate">Célula Desempenho</p><div className="flex items-center gap-1.5 text-[10px] text-green-600 font-medium bg-green-100 px-2 py-0.5 rounded-full w-fit mt-0.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div> Online</div></div>
+                     </div>
+                   ) : (
+                     <div className="flex justify-center"><div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">CD</div></div>
+                   )}
+                </div>
+              </div>
+
+              <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+                <header className="h-20 flex items-center justify-between px-8">
+                   <h1 className="text-2xl font-bold text-white drop-shadow-md">Portal CSC</h1>
+                </header>
+
+                <main className="flex-1 overflow-y-auto p-4 md:p-8 pt-2">
+                  <div className="max-w-[1800px] mx-auto h-full">
+                    {activeTab === 'projects' && <ProjectsModule user={user} />}
+                    {activeTab === 'dir' && <DirectorateContainer user={user} />}
+                    {activeTab === 'kanban' && <KanbanModule user={user} />}
+                  </div>
+                </main>
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PortalCSC />);
+    </script>
+</body>
+</html>
