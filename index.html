@@ -232,7 +232,6 @@
               a.click();
             };
             
-            // Encode em base64 garantindo o suporte a acentuação
             img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
           };
 
@@ -285,6 +284,114 @@
             </div>
           );
         };
+
+        const GovBiChartModalComponent = ({ title, data, target, chartType, lowerIsBetter, onClose, isTma = false }) => {
+          const svgRef = useRef(null);
+          
+          const validData = data.map(d => d === null || isNaN(d) ? 0 : d);
+          const rawMax = Math.max(target, ...validData);
+          const maxY = isTma ? rawMax * 1.5 : (rawMax * 1.2 || 100);
+
+          const width = 600; const height = 300; const padding = 50; 
+          const graphWidth = width - padding * 2; const graphHeight = height - padding * 2; 
+          
+          const getX = (index) => padding + (index * (graphWidth / (validData.length - 1 || 1)));
+          const getY = (val) => height - padding - ((val / maxY) * graphHeight);
+          
+          const exportChart = () => {
+            if (!svgRef.current) return;
+            const svg = svgRef.current;
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            const img = new Image();
+            
+            img.onload = () => {
+              canvas.width = width;
+              canvas.height = height;
+              ctx.fillStyle = "white"; 
+              ctx.fillRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0);
+              const a = document.createElement("a");
+              a.download = `Grafico_${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.png`;
+              a.href = canvas.toDataURL("image/png");
+              a.click();
+            };
+            img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+          };
+
+          const formatY = (val) => isTma ? `${Math.round(val)}h` : Math.round(val);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl relative">
+                <div className="flex justify-between items-start mb-6 pr-6">
+                  <div>
+                     <h3 className="text-xl font-bold text-gray-800 mb-2 truncate">{title}</h3>
+                     <div className="flex gap-4 text-xs text-gray-500 font-medium">
+                       <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-[#064e3b] rounded-sm"></div> Bom (Dentro da Meta)</span>
+                       <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-[#7f1d1d] rounded-sm"></div> Ruim (Fora da Meta)</span>
+                       <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">Meta: {target} {isTma ? 'Horas' : ''}</span>
+                     </div>
+                  </div>
+                  <button onClick={exportChart} className="shrink-0 text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 px-4 py-2 rounded-lg flex items-center gap-2 font-bold transition-colors border border-blue-200 shadow-sm">
+                      <i className="fas fa-download"></i> Exportar Gráfico
+                  </button>
+                </div>
+
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors">
+                    <i className="fas fa-times w-5 h-5 flex items-center justify-center"></i>
+                </button>
+
+                <div className="flex justify-center bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+                  <svg ref={svgRef} xmlns="http://www.w3.org/2000/svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible bg-white rounded">
+                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1.5" />
+                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1.5" />
+                    
+                    {[0, maxY/2, maxY].map(val => (
+                      <g key={val}>
+                        <line x1={padding} y1={getY(val)} x2={width - padding} y2={getY(val)} stroke="#f3f4f6" strokeDasharray="4" />
+                        <text x={padding - 10} y={getY(val) + 4} textAnchor="end" fontSize="11" fontFamily="sans-serif" fill="#9ca3af" fontWeight="bold">{formatY(val)}</text>
+                      </g>
+                    ))}
+
+                    <line x1={padding} y1={getY(target)} x2={width - padding} y2={getY(target)} stroke="#ca8a04" strokeWidth="2" strokeDasharray="5" />
+                    <text x={padding - 10} y={getY(target) + 15} textAnchor="end" fill="#ca8a04" fontSize="10" fontFamily="sans-serif" fontWeight="bold">Meta</text>
+
+                    {chartType === 'bar' && validData.map((val, i) => {
+                      const isGood = lowerIsBetter ? val <= target : val >= target;
+                      const color = isGood ? '#064e3b' : '#7f1d1d';
+                      const barH = ((val / maxY) * graphHeight);
+                      return (
+                        <g key={i}>
+                          <rect x={getX(i) - 12} y={getY(val)} width={24} height={barH} fill={color} opacity="0.9" rx="3"/>
+                          <text x={getX(i)} y={height - padding + 20} textAnchor="middle" fontSize="11" fontFamily="sans-serif" fill="#6b7280" fontWeight="bold">{MONTHS[i]}</text>
+                        </g>
+                      )
+                    })}
+
+                    {chartType === 'line' && (
+                      <>
+                        <path d={validData.reduce((acc, val, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(val)}`, "")} fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        {validData.map((val, i) => {
+                           const isGood = lowerIsBetter ? val <= target : val >= target;
+                           const color = isGood ? '#064e3b' : '#7f1d1d';
+                           return (
+                             <g key={i}>
+                               <circle cx={getX(i)} cy={getY(val)} r="5" fill={color} stroke="white" strokeWidth="2" />
+                               <text x={getX(i)} y={height - padding + 20} textAnchor="middle" fontSize="11" fontFamily="sans-serif" fill="#6b7280" fontWeight="bold">{MONTHS[i]}</text>
+                             </g>
+                           )
+                        })}
+                      </>
+                    )}
+                  </svg>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
 
         // ==========================================
         // 5. MÓDULOS PRINCIPAIS
@@ -1027,14 +1134,142 @@
         // ==========================================
         // 5.5. NOVOS MÓDULOS DE GOVERNANÇA BI
         // ==========================================
+        
+        // Conversor inteligente de TMA para horas plotáveis
+        const parseTmaToHours = (tmaStr) => {
+            if (!tmaStr) return 0;
+            const s = tmaStr.toLowerCase();
+            let hours = 0;
+            const dMatch = s.match(/(\d+)\s*dia/);
+            if (dMatch) hours += parseInt(dMatch[1], 10) * 24;
+            const hMatch = s.match(/(\d+)\s*hora/);
+            if (hMatch) hours += parseInt(hMatch[1], 10);
+            const mMatch = s.match(/(\d+)\s*minuto/);
+            if (mMatch) hours += parseInt(mMatch[1], 10) / 60;
+            return hours;
+        };
+
+        const GovBiChartModal = ({ title, data, target, chartType, lowerIsBetter, onClose, isTma = false }) => {
+          const svgRef = useRef(null);
+          
+          const validData = data.map(d => d === null || isNaN(d) ? 0 : d);
+          const rawMax = Math.max(target, ...validData);
+          const maxY = isTma ? rawMax * 1.5 : (rawMax * 1.2 || 100);
+
+          const width = 600; const height = 300; const padding = 50; 
+          const graphWidth = width - padding * 2; const graphHeight = height - padding * 2; 
+          
+          const getX = (index) => padding + (index * (graphWidth / (validData.length - 1 || 1)));
+          const getY = (val) => height - padding - ((val / maxY) * graphHeight);
+          
+          const exportChart = () => {
+            if (!svgRef.current) return;
+            const svg = svgRef.current;
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            const img = new Image();
+            
+            img.onload = () => {
+              canvas.width = width;
+              canvas.height = height;
+              ctx.fillStyle = "white"; 
+              ctx.fillRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0);
+              const a = document.createElement("a");
+              a.download = `Grafico_${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.png`;
+              a.href = canvas.toDataURL("image/png");
+              a.click();
+            };
+            img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+          };
+
+          const formatY = (val) => isTma ? `${Math.round(val)}h` : Math.round(val);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl relative">
+                <div className="flex justify-between items-start mb-6 pr-6">
+                  <div>
+                     <h3 className="text-xl font-bold text-gray-800 mb-2 truncate">{title}</h3>
+                     <div className="flex gap-4 text-xs text-gray-500 font-medium">
+                       <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-[#064e3b] rounded-sm"></div> Bom (Dentro da Meta)</span>
+                       <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-[#7f1d1d] rounded-sm"></div> Ruim (Fora da Meta)</span>
+                       <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">Meta: {target} {isTma ? 'Horas' : ''}</span>
+                     </div>
+                  </div>
+                  <button onClick={exportChart} className="shrink-0 text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 px-4 py-2 rounded-lg flex items-center gap-2 font-bold transition-colors border border-blue-200 shadow-sm">
+                      <i className="fas fa-download"></i> Exportar Gráfico
+                  </button>
+                </div>
+
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors">
+                    <i className="fas fa-times w-5 h-5 flex items-center justify-center"></i>
+                </button>
+
+                <div className="flex justify-center bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+                  <svg ref={svgRef} xmlns="http://www.w3.org/2000/svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible bg-white rounded">
+                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1.5" />
+                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1.5" />
+                    
+                    {[0, maxY/2, maxY].map(val => (
+                      <g key={val}>
+                        <line x1={padding} y1={getY(val)} x2={width - padding} y2={getY(val)} stroke="#f3f4f6" strokeDasharray="4" />
+                        <text x={padding - 10} y={getY(val) + 4} textAnchor="end" fontSize="11" fontFamily="sans-serif" fill="#9ca3af" fontWeight="bold">{formatY(val)}</text>
+                      </g>
+                    ))}
+
+                    <line x1={padding} y1={getY(target)} x2={width - padding} y2={getY(target)} stroke="#ca8a04" strokeWidth="2" strokeDasharray="5" />
+                    <text x={padding - 10} y={getY(target) + 15} textAnchor="end" fill="#ca8a04" fontSize="10" fontFamily="sans-serif" fontWeight="bold">Meta</text>
+
+                    {chartType === 'bar' && validData.map((val, i) => {
+                      const isGood = lowerIsBetter ? val <= target : val >= target;
+                      const color = isGood ? '#064e3b' : '#7f1d1d';
+                      const barH = ((val / maxY) * graphHeight);
+                      return (
+                        <g key={i}>
+                          <rect x={getX(i) - 12} y={getY(val)} width={24} height={barH} fill={color} opacity="0.9" rx="3"/>
+                          <text x={getX(i)} y={height - padding + 20} textAnchor="middle" fontSize="11" fontFamily="sans-serif" fill="#6b7280" fontWeight="bold">{MONTHS[i]}</text>
+                        </g>
+                      )
+                    })}
+
+                    {chartType === 'line' && (
+                      <>
+                        <path d={validData.reduce((acc, val, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(val)}`, "")} fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        {validData.map((val, i) => {
+                           const isGood = lowerIsBetter ? val <= target : val >= target;
+                           const color = isGood ? '#064e3b' : '#7f1d1d';
+                           return (
+                             <g key={i}>
+                               <circle cx={getX(i)} cy={getY(val)} r="5" fill={color} stroke="white" strokeWidth="2" />
+                               <text x={getX(i)} y={height - padding + 20} textAnchor="middle" fontSize="11" fontFamily="sans-serif" fill="#6b7280" fontWeight="bold">{MONTHS[i]}</text>
+                             </g>
+                           )
+                        })}
+                      </>
+                    )}
+                  </svg>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+
         const SlaGovernancaTab = ({ user }) => {
           const [data, setData] = useState(Array.from({length: 12}, () => ({ noPrazo: null, expirados: null })));
+          const [meta, setMeta] = useState(96.41);
+          const [showChart, setShowChart] = useState(false);
           const [loading, setLoading] = useState(true);
 
           useEffect(() => {
             if (!user) return;
             const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'sla'), (d) => {
-               if (d.exists() && d.data().months) setData(d.data().months);
+               if (d.exists()) {
+                 if (d.data().months) setData(d.data().months);
+                 if (d.data().meta !== undefined) setMeta(d.data().meta);
+               }
                setLoading(false);
             }, (error) => {
                console.error("Erro no ouvinte do SLA Gov:", error);
@@ -1047,7 +1282,13 @@
              const newM = [...data];
              newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
              setData(newM);
-             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'sla'), { months: newM });
+             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'sla'), { months: newM }, { merge: true });
+          };
+
+          const handleMetaUpdate = async (val) => {
+             const num = parseFloat(val);
+             setMeta(num);
+             if (user && !isNaN(num)) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'sla'), { meta: num }, { merge: true });
           };
 
           let sumNoPrazo = 0; let sumExpirados = 0;
@@ -1061,14 +1302,21 @@
              return { ...m, tot, pReal, totAcum, pAcum, sumNoPrazo, sumExpirados };
           });
 
+          const chartData = computed.map(c => parseFloat(c.pReal) || 0);
+
           if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando SLA Governança...</p></div>;
 
           return (
              <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+               {showChart && <GovBiChartModal title="SLA Governança (% Real)" data={chartData} target={meta} chartType="bar" lowerIsBetter={false} onClose={() => setShowChart(false)} />}
+               
                <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
-                 <div>
-                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-clock text-blue-600"></i> SLA Governança</h2>
-                   <p className="text-xs text-gray-500 mt-1">Acompanhamento de Atendimentos Fechados vs Expirados</p>
+                 <div className="flex items-center">
+                   <div>
+                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-clock text-blue-600"></i> SLA Governança</h2>
+                     <p className="text-xs text-gray-500 mt-1">Acompanhamento de Atendimentos Fechados vs Expirados</p>
+                   </div>
+                   <button onClick={() => setShowChart(true)} className="ml-4 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg shadow-sm text-xs font-bold flex items-center gap-2 transition-colors"><i className="fas fa-chart-bar"></i> Gráfico</button>
                  </div>
                </div>
                <div className="flex-1 overflow-auto bg-gray-100 p-4">
@@ -1086,16 +1334,21 @@
                             <th className="p-3 text-center border-b border-gray-300">Expirados Acum</th>
                             <th className="p-3 text-center border-b border-gray-300 bg-green-100/50">Total Acum</th>
                             <th className="p-3 text-center border-b border-gray-300 bg-green-100/50">% Acum</th>
-                            <th className="p-3 text-center border-b border-gray-300">Meta</th>
+                            <th className="p-2 text-center border-b border-gray-300 bg-gray-100">
+                               <div className="flex flex-col items-center">
+                                  <span className="text-[10px] uppercase text-gray-500 mb-1">Meta Global (%)</span>
+                                  <input type="number" step="0.01" className="w-16 text-center font-bold outline-none border border-gray-300 rounded focus:border-blue-500 px-1 py-0.5" value={meta} onChange={e => handleMetaUpdate(e.target.value)} />
+                               </div>
+                            </th>
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-gray-200 bg-white">
                           {MONTHS.map((m, i) => {
                               const row = computed[i] || {};
                               const pRealVal = parseFloat(row.pReal);
-                              const realColor = pRealVal >= 96.41 ? 'text-green-600' : pRealVal < 96.41 ? 'text-red-600' : 'text-gray-700';
+                              const realColor = pRealVal >= meta ? 'text-green-600' : pRealVal < meta ? 'text-red-600' : 'text-gray-700';
                               const pAcumVal = parseFloat(row.pAcum);
-                              const acumColor = pAcumVal >= 96.41 ? 'text-green-600' : pAcumVal < 96.41 ? 'text-red-600' : 'text-gray-700';
+                              const acumColor = pAcumVal >= meta ? 'text-green-600' : pAcumVal < meta ? 'text-red-600' : 'text-gray-700';
 
                               return (
                                 <tr key={i} className="hover:bg-blue-50 transition-colors">
@@ -1108,7 +1361,7 @@
                                   <td className="p-3 text-center text-gray-500">{row.sumExpirados || '-'}</td>
                                   <td className="p-3 text-center font-bold bg-green-50/30 text-gray-700">{row.totAcum || '-'}</td>
                                   <td className={`p-3 text-center font-bold bg-green-50/30 ${acumColor}`}>{row.pAcum !== '-' ? row.pAcum + '%' : '-'}</td>
-                                  <td className="p-3 text-center font-bold text-gray-400">96.41%</td>
+                                  <td className="p-3 text-center font-bold text-gray-400 bg-gray-50">{meta}%</td>
                                 </tr>
                               )
                           })}
@@ -1123,12 +1376,17 @@
 
         const AcuracidadeTab = ({ user }) => {
           const [data, setData] = useState(Array.from({length: 12}, () => ({ revisados: null, visualizados: null })));
+          const [meta, setMeta] = useState(90);
+          const [showChart, setShowChart] = useState(false);
           const [loading, setLoading] = useState(true);
 
           useEffect(() => {
             if (!user) return;
             const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'acuracidade'), (d) => {
-               if (d.exists() && d.data().months) setData(d.data().months);
+               if (d.exists()) {
+                 if (d.data().months) setData(d.data().months);
+                 if (d.data().meta !== undefined) setMeta(d.data().meta);
+               }
                setLoading(false);
             }, (error) => {
                console.error("Erro no ouvinte de Acuracidade:", error);
@@ -1141,7 +1399,13 @@
              const newM = [...data];
              newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
              setData(newM);
-             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'acuracidade'), { months: newM });
+             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'acuracidade'), { months: newM }, { merge: true });
+          };
+
+          const handleMetaUpdate = async (val) => {
+             const num = parseFloat(val);
+             setMeta(num);
+             if (user && !isNaN(num)) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'acuracidade'), { meta: num }, { merge: true });
           };
 
           const computed = (data || []).map(m => {
@@ -1156,14 +1420,21 @@
               return { ...m, p, rCalc, vCalc };
           });
 
+          const chartData = computed.map(c => parseFloat(c.p) || 0);
+
           if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando Acuracidade da Base...</p></div>;
 
           return (
              <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+               {showChart && <GovBiChartModal title="Acuracidade da Base (%)" data={chartData} target={meta} chartType="bar" lowerIsBetter={false} onClose={() => setShowChart(false)} />}
+               
                <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
-                 <div>
-                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-check-circle text-purple-600"></i> Acuracidade da Base</h2>
-                   <p className="text-xs text-gray-500 mt-1">Cálculo de Base de Conhecimento e Revisões</p>
+                 <div className="flex items-center">
+                   <div>
+                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-check-circle text-purple-600"></i> Acuracidade da Base</h2>
+                     <p className="text-xs text-gray-500 mt-1">Cálculo de Base de Conhecimento e Revisões</p>
+                   </div>
+                   <button onClick={() => setShowChart(true)} className="ml-4 text-purple-500 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 p-2 rounded-lg shadow-sm text-xs font-bold flex items-center gap-2 transition-colors"><i className="fas fa-chart-bar"></i> Gráfico</button>
                  </div>
                </div>
                <div className="flex-1 overflow-auto bg-gray-100 p-4">
@@ -1179,14 +1450,19 @@
                             <th className="p-3 text-center border-b border-gray-300 bg-indigo-50" title="Valor calculado (+75) limitado a 100">Rev (Cálculo)</th>
                             <th className="p-3 text-center border-b border-gray-300 bg-indigo-50" title="Valor calculado (-50) limitado a 100">Vis (Cálculo)</th>
                             <th className="p-3 text-center border-b border-gray-300 bg-indigo-100 text-indigo-900">% Real/Acumulado</th>
-                            <th className="p-3 text-center border-b border-gray-300">Meta</th>
+                            <th className="p-2 text-center border-b border-gray-300 bg-gray-100">
+                               <div className="flex flex-col items-center">
+                                  <span className="text-[10px] uppercase text-gray-500 mb-1">Meta (%)</span>
+                                  <input type="number" step="0.1" className="w-16 text-center font-bold outline-none border border-gray-300 rounded focus:border-purple-500 px-1 py-0.5" value={meta} onChange={e => handleMetaUpdate(e.target.value)} />
+                               </div>
+                            </th>
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-gray-200 bg-white">
                           {MONTHS.map((m, i) => {
                               const row = computed[i] || {};
                               const pVal = parseFloat(row.p);
-                              const color = pVal >= 90 ? 'text-green-600' : pVal < 90 ? 'text-red-600' : 'text-indigo-700';
+                              const color = pVal >= meta ? 'text-green-600' : pVal < meta ? 'text-red-600' : 'text-indigo-700';
 
                               return (
                                 <tr key={i} className="hover:bg-purple-50 transition-colors">
@@ -1197,7 +1473,7 @@
                                   <td className="p-3 text-center text-gray-600 bg-indigo-50/30">{row.rCalc || '-'}</td>
                                   <td className="p-3 text-center text-gray-600 bg-indigo-50/30">{row.vCalc || '-'}</td>
                                   <td className={`p-3 text-center font-bold bg-indigo-100/30 text-lg ${color}`}>{row.p && row.p !== '-' ? row.p + '%' : '-'}</td>
-                                  <td className="p-3 text-center font-bold text-gray-400">90%</td>
+                                  <td className="p-3 text-center font-bold text-gray-400 bg-gray-50">{meta}%</td>
                                 </tr>
                               )
                           })}
@@ -1212,12 +1488,17 @@
 
         const IrosTab = ({ user }) => {
           const [data, setData] = useState(Array.from({length: 12}, () => ({ req: null, inc: null, antigos: null, vazio: null, semResolv: null, encerrados: null })));
+          const [meta, setMeta] = useState(0.04);
+          const [showChart, setShowChart] = useState(false);
           const [loading, setLoading] = useState(true);
 
           useEffect(() => {
             if (!user) return;
             const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'iros'), (d) => {
-               if (d.exists() && d.data().months) setData(d.data().months);
+               if (d.exists()) {
+                 if (d.data().months) setData(d.data().months);
+                 if (d.data().meta !== undefined) setMeta(d.data().meta);
+               }
                setLoading(false);
             }, (error) => {
                console.error("Erro no ouvinte do IROS:", error);
@@ -1230,7 +1511,13 @@
             const newM = [...data];
             newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
             setData(newM);
-            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'iros'), { months: newM });
+            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'iros'), { months: newM }, { merge: true });
+          };
+
+          const handleMetaUpdate = async (val) => {
+             const num = parseFloat(val);
+             setMeta(num);
+             if (user && !isNaN(num)) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'iros'), { meta: num }, { merge: true });
           };
 
           const rows = [
@@ -1245,14 +1532,31 @@
               { k: 'iros', label: 'IROS (Índice de Resolutividade Otimizada)', readonly: true }
           ];
 
+          // Array para o gráfico pegando apenas o IROS consolidado
+          const chartData = MONTHS.map((_, i) => {
+             const d = data[i] || {};
+             const num = (d.antigos||0) + (d.vazio||0) + (d.semResolv||0);
+             if (d.encerrados > 0) return parseFloat((num / d.encerrados).toFixed(6));
+             return 0;
+          });
+
           if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando IROS...</p></div>;
 
           return (
              <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+               {showChart && <GovBiChartModal title="Índice IROS" data={chartData} target={meta} chartType="bar" lowerIsBetter={true} onClose={() => setShowChart(false)} />}
+
                <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
-                 <div>
-                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-chart-area text-yellow-600"></i> IROS</h2>
-                   <p className="text-xs text-gray-500 mt-1">Soma de Backlogs, Tarefas e Processos Encerrados</p>
+                 <div className="flex items-center">
+                   <div>
+                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-chart-area text-yellow-600"></i> IROS</h2>
+                     <p className="text-xs text-gray-500 mt-1">Soma de Backlogs, Tarefas e Processos Encerrados</p>
+                   </div>
+                   <button onClick={() => setShowChart(true)} className="ml-4 text-yellow-600 hover:text-yellow-700 bg-yellow-50 hover:bg-yellow-100 p-2 rounded-lg shadow-sm text-xs font-bold flex items-center gap-2 transition-colors"><i className="fas fa-chart-bar"></i> Gráfico</button>
+                 </div>
+                 <div className="flex items-center bg-gray-100 p-2 rounded-lg shadow-inner">
+                    <span className="text-xs uppercase text-gray-500 font-bold mr-2">Meta IROS:</span>
+                    <input type="number" step="0.01" className="w-20 text-center font-bold outline-none border border-gray-300 rounded focus:border-yellow-500 px-1 py-1" value={meta} onChange={e => handleMetaUpdate(e.target.value)} />
                  </div>
                </div>
                <div className="flex-1 overflow-auto bg-gray-100 p-4">
@@ -1290,7 +1594,7 @@
                                       return (
                                          <td key={i} className={`p-0 border-r border-gray-100 ${isResult ? 'bg-yellow-100/50' : isSubResult ? 'bg-blue-50/50' : ''}`}>
                                             {r.readonly ? 
-                                               <div className={`w-full h-10 flex items-center justify-center font-bold ${isResult ? 'text-yellow-700 text-lg' : 'text-blue-700 text-md'}`}>{val || '-'}</div> : 
+                                               <div className={`w-full h-10 flex items-center justify-center font-bold ${isResult ? (val && parseFloat(val) <= meta ? 'text-green-700 text-lg' : 'text-red-700 text-lg') : 'text-blue-700 text-md'}`}>{val || '-'}</div> : 
                                                <input type="number" className="w-full h-10 text-center outline-none focus:bg-yellow-50 bg-transparent text-gray-700" value={val} onChange={e => handleUpdate(i, r.k, e.target.value)} />
                                             }
                                          </td>
@@ -1310,12 +1614,17 @@
 
         const TmaTab = ({ user }) => {
           const [data, setData] = useState(Array.from({length: 12}, () => ''));
+          const [meta, setMeta] = useState(180); // Ex: Meta em horas
+          const [showChart, setShowChart] = useState(false);
           const [loading, setLoading] = useState(true);
 
           useEffect(() => {
             if (!user) return;
             const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'tma'), (d) => {
-               if (d.exists() && d.data().months) setData(d.data().months);
+               if (d.exists()) {
+                 if (d.data().months) setData(d.data().months);
+                 if (d.data().meta !== undefined) setMeta(d.data().meta);
+               }
                setLoading(false);
             }, (error) => {
                console.error("Erro no ouvinte do TMA:", error);
@@ -1328,17 +1637,34 @@
             const newM = [...data];
             newM[idx] = val;
             setData(newM);
-            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'tma'), { months: newM });
+            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'tma'), { months: newM }, { merge: true });
           };
+
+          const handleMetaUpdate = async (val) => {
+             const num = parseFloat(val);
+             setMeta(num);
+             if (user && !isNaN(num)) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'tma'), { meta: num }, { merge: true });
+          };
+
+          const chartData = data.map(str => parseTmaToHours(str));
 
           if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando TMA...</p></div>;
 
           return (
              <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+               {showChart && <GovBiChartModal title="TMA Registrado (Em Horas)" data={chartData} target={meta} chartType="line" lowerIsBetter={true} isTma={true} onClose={() => setShowChart(false)} />}
+               
                <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
-                 <div>
-                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-stopwatch text-red-600"></i> TMA</h2>
-                   <p className="text-xs text-gray-500 mt-1">Tempo Médio de Atendimento Mensal</p>
+                 <div className="flex items-center">
+                   <div>
+                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-stopwatch text-red-600"></i> TMA</h2>
+                     <p className="text-xs text-gray-500 mt-1">Tempo Médio de Atendimento Mensal</p>
+                   </div>
+                   <button onClick={() => setShowChart(true)} className="ml-4 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg shadow-sm text-xs font-bold flex items-center gap-2 transition-colors"><i className="fas fa-chart-line"></i> Gráfico</button>
+                 </div>
+                 <div className="flex items-center bg-gray-100 p-2 rounded-lg shadow-inner">
+                    <span className="text-xs uppercase text-gray-500 font-bold mr-2">Meta (Horas):</span>
+                    <input type="number" className="w-20 text-center font-bold outline-none border border-gray-300 rounded focus:border-red-500 px-1 py-1" value={meta} onChange={e => handleMetaUpdate(e.target.value)} title="Meta global convertida em horas" />
                  </div>
                </div>
                <div className="flex-1 overflow-auto bg-gray-100 p-4 flex justify-center">
@@ -1348,17 +1674,27 @@
                           <tr>
                             <th className="p-4 text-left font-bold border-b border-gray-300 w-64">Mês</th>
                             <th className="p-4 text-left font-bold border-b border-gray-300">TMA Registrado</th>
+                            <th className="p-4 text-center font-bold border-b border-gray-300 w-48 text-gray-500 text-xs">Conversão (Gráfico)</th>
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-gray-200 bg-white">
-                          {MONTHS.map((m, i) => (
-                             <tr key={i} className="hover:bg-red-50 transition-colors">
-                                <td className="p-4 font-bold border-r border-gray-100 bg-gray-50 text-gray-700 uppercase">{GOV_MONTHS_ROWS[i]}</td>
-                                <td className="p-0">
-                                   <input type="text" className="w-full h-14 px-6 outline-none focus:bg-red-50 text-gray-700 font-medium bg-transparent" placeholder="Ex: 7 Dias 15 Horas 28 Minutos 6 Segundos" value={data[i] || ''} onChange={e => handleUpdate(i, e.target.value)} />
-                                </td>
-                             </tr>
-                          ))}
+                          {MONTHS.map((m, i) => {
+                             const parsedHours = parseTmaToHours(data[i]);
+                             const isGood = parsedHours <= meta;
+                             const color = parsedHours === 0 ? 'text-gray-400' : isGood ? 'text-green-600 font-bold' : 'text-red-600 font-bold';
+
+                             return (
+                               <tr key={i} className="hover:bg-red-50 transition-colors">
+                                  <td className="p-4 font-bold border-r border-gray-100 bg-gray-50 text-gray-700 uppercase">{GOV_MONTHS_ROWS[i]}</td>
+                                  <td className="p-0 border-r border-gray-100">
+                                     <input type="text" className="w-full h-14 px-6 outline-none focus:bg-red-50 text-gray-700 font-medium bg-transparent" placeholder="Ex: 7 Dias 15 Horas 28 Minutos 6 Segundos" value={data[i] || ''} onChange={e => handleUpdate(i, e.target.value)} />
+                                  </td>
+                                  <td className={`p-0 text-center bg-gray-50/50 ${color}`}>
+                                     {parsedHours > 0 ? `~${Math.round(parsedHours)}h` : '-'}
+                                  </td>
+                               </tr>
+                             )
+                          })}
                        </tbody>
                      </table>
                  </div>
