@@ -200,7 +200,9 @@
         // 4. COMPONENTES AUXILIARES
         // ==========================================
         const IndicatorChartModal = ({ indicator, onClose }) => {
+          const svgRef = useRef(null);
           if (!indicator) return null;
+          
           const chartData = indicator.months.map((m, idx) => ({ name: MONTHS[idx], real: m.real || 0, acum: m.acum || 0 }));
           const barColor = "#3b82f6"; const lineColor = "#10b981";
           const width = 600; const height = 300; const padding = 40; const graphWidth = width - padding * 2; const graphHeight = height - padding * 2; const maxY = Math.max(100, ...chartData.map(d => d.real)) || 100;
@@ -210,31 +212,73 @@
             const x = getX(i); const y = getY(point.acum); return i === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`;
           }, "");
 
+          const exportChart = () => {
+            if (!svgRef.current) return;
+            const svg = svgRef.current;
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            const img = new Image();
+            
+            img.onload = () => {
+              canvas.width = width;
+              canvas.height = height;
+              ctx.fillStyle = "white"; 
+              ctx.fillRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0);
+              const a = document.createElement("a");
+              a.download = `Grafico_${indicator.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.png`;
+              a.href = canvas.toDataURL("image/png");
+              a.click();
+            };
+            
+            // Encode em base64 garantindo o suporte a acentuação
+            img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+          };
+
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
               <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl relative">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100">
+                
+                <div className="flex justify-between items-start mb-6 pr-6">
+                  <div>
+                     <h3 className="text-xl font-bold text-gray-800 mb-2 truncate" title={indicator.name}>{indicator.name}</h3>
+                     <div className="flex gap-4 text-xs text-gray-500 font-medium">
+                       <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-blue-500 rounded-sm"></div> Real Mensal</span>
+                       <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-emerald-500 rounded-full h-[3px]"></div> Acumulado Anual</span>
+                       <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">Meta: {indicator.target}{indicator.type === 'percent' ? '%' : ''}</span>
+                     </div>
+                  </div>
+                  <button onClick={exportChart} className="shrink-0 text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 px-4 py-2 rounded-lg flex items-center gap-2 font-bold transition-colors border border-blue-200 shadow-sm">
+                      <i className="fas fa-download"></i> Exportar Gráfico
+                  </button>
+                </div>
+
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors">
                     <i className="fas fa-times w-5 h-5 flex items-center justify-center"></i>
                 </button>
-                <h3 className="text-lg font-bold text-gray-800 mb-1 pr-8 truncate">{indicator.name}</h3>
-                <div className="flex gap-4 text-xs text-gray-500 mb-6">
-                  <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded-sm"></div> Real Mensal</span>
-                  <span className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded-full h-[3px]"></div> Acumulado Anual</span>
-                  <span>Meta: {indicator.target}{indicator.type === 'percent' ? '%' : ''}</span>
-                </div>
-                <div className="flex justify-center">
-                  <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
-                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1" />
-                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1" />
+
+                <div className="flex justify-center bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+                  <svg ref={svgRef} xmlns="http://www.w3.org/2000/svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible bg-white rounded">
+                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1.5" />
+                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="1.5" />
                     {[0, maxY/2, maxY].map(val => (
-                      <g key={val}><line x1={padding} y1={getY(val)} x2={width - padding} y2={getY(val)} stroke="#f3f4f6" strokeDasharray="4" /><text x={padding - 10} y={getY(val) + 4} textAnchor="end" fontSize="10" fill="#9ca3af">{Math.round(val)}</text></g>
+                      <g key={val}>
+                        <line x1={padding} y1={getY(val)} x2={width - padding} y2={getY(val)} stroke="#f3f4f6" strokeDasharray="4" />
+                        <text x={padding - 10} y={getY(val) + 4} textAnchor="end" fontSize="11" fontFamily="sans-serif" fill="#9ca3af" fontWeight="bold">{Math.round(val)}</text>
+                      </g>
                     ))}
                     {chartData.map((d, i) => {
                       const barH = ((d.real / maxY) * graphHeight);
-                      return (<g key={i}><rect x={getX(i) - 10} y={getY(d.real)} width={20} height={barH} fill={barColor} opacity="0.8" rx="2"/><text x={getX(i)} y={height - padding + 15} textAnchor="middle" fontSize="10" fill="#6b7280">{d.name}</text></g>)
+                      return (
+                        <g key={i}>
+                          <rect x={getX(i) - 12} y={getY(d.real)} width={24} height={barH} fill={barColor} opacity="0.85" rx="3"/>
+                          <text x={getX(i)} y={height - padding + 20} textAnchor="middle" fontSize="11" fontFamily="sans-serif" fill="#6b7280" fontWeight="bold">{d.name}</text>
+                        </g>
+                      )
                     })}
-                    <path d={linePath} fill="none" stroke={lineColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                    {chartData.map((d, i) => (<circle key={i} cx={getX(i)} cy={getY(d.acum)} r="4" fill="white" stroke={lineColor} strokeWidth="2" />))}
+                    <path d={linePath} fill="none" stroke={lineColor} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    {chartData.map((d, i) => (<circle key={i} cx={getX(i)} cy={getY(d.acum)} r="4.5" fill="white" stroke={lineColor} strokeWidth="2.5" />))}
                   </svg>
                 </div>
               </div>
@@ -521,6 +565,7 @@
           const [summaryData, setSummaryData] = useState([]);
           const [loading, setLoading] = useState(true);
           const [searchTerm, setSearchTerm] = useState("");
+          const [selectedIndicator, setSelectedIndicator] = useState(null);
           const [colWidths, setColWidths] = useState(() => JSON.parse(localStorage.getItem('dirSummaryColWidths')) || { 
             name: 350, ...MONTHS.reduce((acc, m) => ({...acc, [m]: 160}), {}) 
           });
@@ -586,6 +631,7 @@
 
           return (
             <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+              {selectedIndicator && <IndicatorChartModal indicator={selectedIndicator} onClose={() => setSelectedIndicator(null)} />}
               <div className="p-4 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
                 <div>
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-clipboard-list text-purple-600"></i> RT Governança 2026</h2>
@@ -621,7 +667,12 @@
                       <tbody className="divide-y divide-gray-200">
                         {filteredData.map((ind, idx) => (
                            <tr key={idx} className={`hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                              <td className="p-2 border-r border-gray-200 sticky left-0 z-10 bg-inherit font-medium text-gray-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] truncate max-w-xs" title={ind.name}>{ind.name}</td>
+                              <td className="p-0 border-r border-gray-200 sticky left-0 z-10 bg-inherit shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer group/name hover:bg-blue-50" title={`Ver gráfico de ${ind.name}`} onClick={() => setSelectedIndicator(ind)}>
+                                 <div className="flex justify-between items-center w-full h-full px-2 py-2 font-medium text-gray-700 group-hover/name:text-blue-600 transition-colors">
+                                    <span className="truncate max-w-[90%]">{ind.name}</span>
+                                    <i className="fas fa-chart-line text-blue-400 opacity-0 group-hover/name:opacity-100 transition-opacity"></i>
+                                 </div>
+                              </td>
                               {ind.months.map((m, mIdx) => {
                                  let realBg = "bg-gray-50 text-gray-300"; let realText = "-";
                                  if (m.real !== null) { 
@@ -637,7 +688,7 @@
                                  }
                                  return (
                                     <td key={mIdx} className="p-0 border-r border-gray-200 min-w-[160px]">
-                                       <div className="flex items-stretch h-8">
+                                       <div className="flex items-stretch h-full min-h-[32px]">
                                           <div className="w-1/4 flex items-center justify-center text-[10px] border-r border-gray-100 bg-white text-gray-400">{m.falseVal ?? '-'}</div>
                                           <div className="w-1/4 flex items-center justify-center text-[10px] border-r border-gray-100 bg-white text-gray-400">{m.trueVal ?? '-'}</div>
                                           <div className={`w-1/4 flex items-center justify-center text-[9px] font-bold border-r border-white ${realBg}`}>{realText}</div>
@@ -863,8 +914,11 @@
                       <tbody className="divide-y divide-gray-200">
                         {filteredIndicators.map((ind, idx) => (
                           <tr key={ind.id} className={`hover:bg-blue-50 transition-colors ${ind.groupColor ? ind.groupColor : 'bg-white'}`}>
-                            <td className={`p-0 border-r border-gray-200 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] truncate max-w-xs ${ind.groupColor ? ind.groupColor : 'bg-white'}`} title={ind.name}>
-                              <input type="text" value={ind.name} onChange={(e) => updateIndicatorMeta(ind.id, 'name', e.target.value)} className="w-full h-full px-2 py-1 bg-transparent border-none focus:ring-0 truncate cursor-text font-medium"/>
+                            <td className={`p-0 border-r border-gray-200 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] ${ind.groupColor ? ind.groupColor : 'bg-white'}`} title={ind.name}>
+                              <div className="flex items-center w-full h-full pr-1">
+                                <input type="text" value={ind.name} onChange={(e) => updateIndicatorMeta(ind.id, 'name', e.target.value)} className="flex-1 min-w-0 h-full px-2 py-1 bg-transparent border-none focus:ring-0 truncate cursor-text font-medium outline-none"/>
+                                <button onClick={() => setSelectedIndicator(ind)} className="text-gray-400 hover:text-blue-600 transition-colors p-1.5 rounded-md hover:bg-blue-100 mr-1" title="Ver Gráfico"><i className="fas fa-chart-line"></i></button>
+                              </div>
                             </td>
                             {showWeight && <td className="p-0 border-r border-gray-200"><input type="number" value={ind.weight} onChange={(e)=>updateIndicatorMeta(ind.id,'weight',e.target.value)} className="w-full text-center border-none focus:ring-0 bg-transparent"/></td>}
                             {ind.months.map((m, mIdx) => {
@@ -1128,14 +1182,20 @@
                     {isSidebarOpen && <span className="font-medium">Painel de Projetos</span>}
                   </button>
 
-                  <button onClick={() => setActiveTab('dir')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'dir' ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-emerald-600'}`}>
-                    <i className={`fas fa-chart-pie text-xl shrink-0 ${activeTab === 'dir' ? 'text-white' : 'text-gray-400 group-hover:text-emerald-600'}`}></i>
-                    {isSidebarOpen && <span className="font-medium">Diretoria</span>}
-                  </button>
-
                   <button onClick={() => setActiveTab('kanban')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'kanban' ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'}`}>
                     <i className={`fas fa-tasks text-xl shrink-0 ${activeTab === 'kanban' ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'}`}></i>
                     {isSidebarOpen && <span className="font-medium">Quadro Kanban</span>}
+                  </button>
+
+                  {isSidebarOpen ? (
+                     <hr className="my-4 border-gray-200 w-5/6 mx-auto" />
+                  ) : (
+                     <hr className="my-4 border-gray-200 w-8 mx-auto" />
+                  )}
+
+                  <button onClick={() => setActiveTab('dir')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'dir' ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-emerald-600'}`}>
+                    <i className={`fas fa-chart-pie text-xl shrink-0 ${activeTab === 'dir' ? 'text-white' : 'text-gray-400 group-hover:text-emerald-600'}`}></i>
+                    {isSidebarOpen && <span className="font-medium text-left leading-tight">Indicadores de Diretoria</span>}
                   </button>
                 </nav>
 
