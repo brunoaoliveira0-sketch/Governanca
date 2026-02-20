@@ -1033,8 +1033,11 @@
 
           useEffect(() => {
             if (!user) return;
-            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_sla_doc'), (d) => {
+            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'sla'), (d) => {
                if (d.exists() && d.data().months) setData(d.data().months);
+               setLoading(false);
+            }, (error) => {
+               console.error("Erro no ouvinte do SLA Gov:", error);
                setLoading(false);
             });
             return unsub;
@@ -1044,7 +1047,7 @@
              const newM = [...data];
              newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
              setData(newM);
-             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_sla_doc'), { months: newM });
+             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'sla'), { months: newM });
           };
 
           let sumNoPrazo = 0; let sumExpirados = 0;
@@ -1124,8 +1127,11 @@
 
           useEffect(() => {
             if (!user) return;
-            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_acuracidade_doc'), (d) => {
+            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'acuracidade'), (d) => {
                if (d.exists() && d.data().months) setData(d.data().months);
+               setLoading(false);
+            }, (error) => {
+               console.error("Erro no ouvinte de Acuracidade:", error);
                setLoading(false);
             });
             return unsub;
@@ -1135,7 +1141,7 @@
              const newM = [...data];
              newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
              setData(newM);
-             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_acuracidade_doc'), { months: newM });
+             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'acuracidade'), { months: newM });
           };
 
           const computed = (data || []).map(m => {
@@ -1210,8 +1216,11 @@
 
           useEffect(() => {
             if (!user) return;
-            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_iros_doc'), (d) => {
+            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'iros'), (d) => {
                if (d.exists() && d.data().months) setData(d.data().months);
+               setLoading(false);
+            }, (error) => {
+               console.error("Erro no ouvinte do IROS:", error);
                setLoading(false);
             });
             return unsub;
@@ -1221,7 +1230,7 @@
             const newM = [...data];
             newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
             setData(newM);
-            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_iros_doc'), { months: newM });
+            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'iros'), { months: newM });
           };
 
           const rows = [
@@ -1305,8 +1314,11 @@
 
           useEffect(() => {
             if (!user) return;
-            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_tma_doc'), (d) => {
+            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'tma'), (d) => {
                if (d.exists() && d.data().months) setData(d.data().months);
+               setLoading(false);
+            }, (error) => {
+               console.error("Erro no ouvinte do TMA:", error);
                setLoading(false);
             });
             return unsub;
@@ -1316,7 +1328,7 @@
             const newM = [...data];
             newM[idx] = val;
             setData(newM);
-            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_tma_doc'), { months: newM });
+            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'tma'), { months: newM });
           };
 
           if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando TMA...</p></div>;
