@@ -1705,22 +1705,136 @@
 
         const GovBiContainer = ({ user }) => {
           const [activeSubTab, setActiveSubTab] = useState('sla');
+          const fileInputRef = useRef(null);
+
+          const handleExportGovBi = async () => {
+            if (!user) return;
+            const collections = ['sla', 'acuracidade', 'iros', 'tma'];
+            const dataMap = {};
+            // Busca o estado atual de todos os bancos de dados
+            for (const col of collections) {
+              const docSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', col));
+              dataMap[col] = docSnap.exists() ? docSnap.data() : { months: Array(12).fill({}), meta: 0 };
+            }
+
+            // Cabeçalho do modelo em CSV adaptado para o Excel do Brasil
+            let csv = "Indicador;Mes;Meta;SLA_No_Prazo;SLA_Expirados;Acuracidade_Revisados;Acuracidade_Visualizados;IROS_Req;IROS_Inc;IROS_Antigos;IROS_Vazio;IROS_Sem_Resolv;IROS_Encerrados;TMA_Valor\n";
+            const mNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+            // Consolida os 4 indicadores do ano no CSV
+            for (let i = 0; i < 12; i++) {
+              const m = mNames[i];
+              const sla = dataMap.sla.months?.[i] || {};
+              const acu = dataMap.acuracidade.months?.[i] || {};
+              const iros = dataMap.iros.months?.[i] || {};
+              const tma = dataMap.tma.months?.[i] || '';
+
+              csv += `SLA;${m};${String(dataMap.sla.meta || 96.41).replace('.', ',')};${sla.noPrazo||''};${sla.expirados||''};;;;;;;;;\n`;
+              csv += `Acuracidade;${m};${String(dataMap.acuracidade.meta || 90).replace('.', ',')};;;${acu.revisados||''};${acu.visualizados||''};;;;;;;;\n`;
+              csv += `IROS;${m};${String(dataMap.iros.meta || 0.04).replace('.', ',')};;;;;${iros.req||''};${iros.inc||''};${iros.antigos||''};${iros.vazio||''};${iros.semResolv||''};${iros.encerrados||''};\n`;
+              csv += `TMA;${m};${String(dataMap.tma.meta || 180).replace('.', ',')};;;;;;;;;;;${tma}\n`;
+            }
+
+            const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `Modelo_Gov_BI_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+          };
+
+          const handleImportGovBi = async (e) => {
+            const file = e.target.files[0];
+            if (!file || !user) return;
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              const lines = event.target.result.split(/\r\n|\n/).filter(l => l.trim());
+              if (lines.length < 2) return;
+
+              const newData = {
+                sla: { meta: null, months: Array(12).fill({}) },
+                acuracidade: { meta: null, months: Array(12).fill({}) },
+                iros: { meta: null, months: Array(12).fill({}) },
+                tma: { meta: null, months: Array(12).fill('') }
+              };
+
+              const monthsMap = { "Jan":0, "Fev":1, "Mar":2, "Abr":3, "Mai":4, "Jun":5, "Jul":6, "Ago":7, "Set":8, "Out":9, "Nov":10, "Dez":11 };
+
+              // Processa linha a linha e direciona para o array correspondente
+              for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(';').map(c => c.trim());
+                if(cols.length < 3) continue;
+                const ind = cols[0];
+                const mIdx = monthsMap[cols[1]];
+                if (mIdx === undefined) continue;
+                
+                const metaStr = cols[2].replace(',', '.');
+                const meta = parseFloat(metaStr);
+
+                const parseNum = (val) => {
+                  if (!val) return null;
+                  const n = Number(val.replace(',', '.'));
+                  return isNaN(n) ? null : n;
+                };
+
+                if (ind === 'SLA') {
+                  if(!isNaN(meta)) newData.sla.meta = meta;
+                  newData.sla.months[mIdx] = { noPrazo: parseNum(cols[3]), expirados: parseNum(cols[4]) };
+                } else if (ind === 'Acuracidade') {
+                  if(!isNaN(meta)) newData.acuracidade.meta = meta;
+                  newData.acuracidade.months[mIdx] = { revisados: parseNum(cols[5]), visualizados: parseNum(cols[6]) };
+                } else if (ind === 'IROS') {
+                  if(!isNaN(meta)) newData.iros.meta = meta;
+                  newData.iros.months[mIdx] = {
+                    req: parseNum(cols[7]), inc: parseNum(cols[8]),
+                    antigos: parseNum(cols[9]), vazio: parseNum(cols[10]),
+                    semResolv: parseNum(cols[11]), encerrados: parseNum(cols[12])
+                  };
+                } else if (ind === 'TMA') {
+                  if(!isNaN(meta)) newData.tma.meta = meta;
+                  newData.tma.months[mIdx] = cols[13] || '';
+                }
+              }
+
+              // Salva tudo de uma vez de forma inteligente e performática no Firebase
+              const batch = writeBatch(db);
+              batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'sla'), { months: newData.sla.months, ...(newData.sla.meta !== null && {meta: newData.sla.meta}) }, { merge: true });
+              batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'acuracidade'), { months: newData.acuracidade.months, ...(newData.acuracidade.meta !== null && {meta: newData.acuracidade.meta}) }, { merge: true });
+              batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'iros'), { months: newData.iros.months, ...(newData.iros.meta !== null && {meta: newData.iros.meta}) }, { merge: true });
+              batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi', 'tma'), { months: newData.tma.months, ...(newData.tma.meta !== null && {meta: newData.tma.meta}) }, { merge: true });
+              await batch.commit();
+              alert("Dados de Governança importados com sucesso!");
+              e.target.value = null; // Libera o input de arquivo
+            };
+            reader.readAsText(file);
+          };
 
           return (
             <div className="flex flex-col h-full gap-4">
-              <div className="flex gap-2 bg-white/50 p-1 rounded-lg w-fit backdrop-blur-sm overflow-x-auto shadow-sm border border-white/50">
-                <button onClick={() => setActiveSubTab('sla')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'sla' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-blue-600'}`}>
-                  <i className="fas fa-clock"></i> SLA Governança
-                </button>
-                <button onClick={() => setActiveSubTab('acuracidade')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'acuracidade' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-purple-600'}`}>
-                  <i className="fas fa-check-circle"></i> Acuracidade da Base
-                </button>
-                <button onClick={() => setActiveSubTab('iros')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'iros' ? 'bg-yellow-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-yellow-600'}`}>
-                  <i className="fas fa-chart-area"></i> IROS
-                </button>
-                <button onClick={() => setActiveSubTab('tma')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'tma' ? 'bg-red-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-red-600'}`}>
-                  <i className="fas fa-stopwatch"></i> TMA
-                </button>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex gap-2 bg-white/50 p-1 rounded-lg w-full md:w-fit backdrop-blur-sm overflow-x-auto shadow-sm border border-white/50">
+                  <button onClick={() => setActiveSubTab('sla')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'sla' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-blue-600'}`}>
+                    <i className="fas fa-clock"></i> SLA Governança
+                  </button>
+                  <button onClick={() => setActiveSubTab('acuracidade')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'acuracidade' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-purple-600'}`}>
+                    <i className="fas fa-check-circle"></i> Acuracidade da Base
+                  </button>
+                  <button onClick={() => setActiveSubTab('iros')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'iros' ? 'bg-yellow-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-yellow-600'}`}>
+                    <i className="fas fa-chart-area"></i> IROS
+                  </button>
+                  <button onClick={() => setActiveSubTab('tma')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'tma' ? 'bg-red-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-red-600'}`}>
+                    <i className="fas fa-stopwatch"></i> TMA
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportGovBi} className="hidden" />
+                  <button onClick={handleExportGovBi} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap">
+                    <i className="fas fa-download"></i> Baixar Modelo
+                  </button>
+                  <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap">
+                    <i className="fas fa-upload"></i> Importar Dados
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-hidden">
