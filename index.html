@@ -205,7 +205,11 @@
           
           const chartData = indicator.months.map((m, idx) => ({ name: MONTHS[idx], real: m.real || 0, acum: m.acum || 0 }));
           const barColor = "#3b82f6"; const lineColor = "#10b981";
-          const width = 600; const height = 300; const padding = 40; const graphWidth = width - padding * 2; const graphHeight = height - padding * 2; const maxY = Math.max(100, ...chartData.map(d => d.real)) || 100;
+          const width = 600; const height = 300; const padding = 40; const graphWidth = width - padding * 2; const graphHeight = height - padding * 2; 
+          
+          // Ajustado maxY para acomodar a linha de meta, se existir, para que não fique cortada
+          const maxY = Math.max(100, (indicator.target ? indicator.target * 1.1 : 100), ...chartData.map(d => d.real)) || 100;
+          
           const getX = (index) => padding + (index * (graphWidth / (chartData.length - 1 || 1)));
           const getY = (val) => height - padding - ((val / maxY) * graphHeight);
           const linePath = chartData.reduce((acc, point, i) => {
@@ -267,6 +271,15 @@
                         <text x={padding - 10} y={getY(val) + 4} textAnchor="end" fontSize="11" fontFamily="sans-serif" fill="#9ca3af" fontWeight="bold">{Math.round(val)}</text>
                       </g>
                     ))}
+                    
+                    {/* ADIÇÃO DA LINHA DA META */}
+                    {indicator.target !== undefined && indicator.target !== null && (
+                      <g>
+                        <line x1={padding} y1={getY(indicator.target)} x2={width - padding} y2={getY(indicator.target)} stroke="#ca8a04" strokeWidth="2" strokeDasharray="5" />
+                        <text x={padding - 10} y={getY(indicator.target) + 15} textAnchor="end" fill="#ca8a04" fontSize="10" fontFamily="sans-serif" fontWeight="bold">Meta: {indicator.target}</text>
+                      </g>
+                    )}
+
                     {chartData.map((d, i) => {
                       const barH = ((d.real / maxY) * graphHeight);
                       return (
@@ -355,8 +368,9 @@
                       </g>
                     ))}
 
+                    {/* META ATUALIZADA PARA MOSTRAR VALOR */}
                     <line x1={padding} y1={getY(target)} x2={width - padding} y2={getY(target)} stroke="#ca8a04" strokeWidth="2" strokeDasharray="5" />
-                    <text x={padding - 10} y={getY(target) + 15} textAnchor="end" fill="#ca8a04" fontSize="10" fontFamily="sans-serif" fontWeight="bold">Meta</text>
+                    <text x={padding - 10} y={getY(target) + 15} textAnchor="end" fill="#ca8a04" fontSize="10" fontFamily="sans-serif" fontWeight="bold">Meta: {target}</text>
 
                     {chartType === 'bar' && validData.map((val, i) => {
                       const isGood = lowerIsBetter ? val <= target : val >= target;
@@ -1220,7 +1234,7 @@
                     ))}
 
                     <line x1={padding} y1={getY(target)} x2={width - padding} y2={getY(target)} stroke="#ca8a04" strokeWidth="2" strokeDasharray="5" />
-                    <text x={padding - 10} y={getY(target) + 15} textAnchor="end" fill="#ca8a04" fontSize="10" fontFamily="sans-serif" fontWeight="bold">Meta</text>
+                    <text x={padding - 10} y={getY(target) + 15} textAnchor="end" fill="#ca8a04" fontSize="10" fontFamily="sans-serif" fontWeight="bold">Meta: {target}</text>
 
                     {chartType === 'bar' && validData.map((val, i) => {
                       const isGood = lowerIsBetter ? val <= target : val >= target;
