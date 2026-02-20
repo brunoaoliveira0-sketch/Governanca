@@ -328,7 +328,6 @@
           const addProject = () => user && addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'gov_projects'), { displayId: Date.now(), process: "Novo", action: "", owner: "", area: "", criticality: "Baixa", status: "Não Iniciado", startDate: "", endDate: "", sla: 0, notes: "" });
           const confirmDelete = () => user && deleteId && deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_projects', deleteId)).then(() => setDeleteId(null));
           
-          // Função para exportar projeto para o Kanban
           const sendToKanban = async (p) => {
             if (!user) return;
             try {
@@ -1025,6 +1024,367 @@
           );
         };
 
+        // ==========================================
+        // 5.5. NOVOS MÓDULOS DE GOVERNANÇA BI
+        // ==========================================
+        const SlaGovernancaTab = ({ user }) => {
+          const [data, setData] = useState(Array(12).fill({ noPrazo: null, expirados: null }));
+          const [loading, setLoading] = useState(true);
+
+          useEffect(() => {
+            if (!user) return;
+            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_sla_doc'), (d) => {
+               if (d.exists() && d.data().months) setData(d.data().months);
+               setLoading(false);
+            });
+            return unsub;
+          }, [user]);
+
+          const handleUpdate = async (idx, field, val) => {
+             const newM = [...data];
+             newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
+             setData(newM);
+             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_sla_doc'), { months: newM });
+          };
+
+          let sumNoPrazo = 0; let sumExpirados = 0;
+          const computed = data.map(m => {
+             const np = m.noPrazo || 0; const exp = m.expirados || 0;
+             const tot = np + exp;
+             const pReal = tot > 0 ? ((np / tot)*100).toFixed(2) : '-';
+             sumNoPrazo += np; sumExpirados += exp;
+             const totAcum = sumNoPrazo + sumExpirados;
+             const pAcum = totAcum > 0 ? ((sumNoPrazo / totAcum)*100).toFixed(2) : '-';
+             return { ...m, tot, pReal, totAcum, pAcum, sumNoPrazo, sumExpirados };
+          });
+
+          if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando SLA Governança...</p></div>;
+
+          return (
+             <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+               <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
+                 <div>
+                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-clock text-blue-600"></i> SLA Governança</h2>
+                   <p className="text-xs text-gray-500 mt-1">Acompanhamento de Atendimentos Fechados vs Expirados</p>
+                 </div>
+               </div>
+               <div className="flex-1 overflow-auto bg-gray-100 p-4">
+                 <div className="bg-white rounded-lg shadow border border-gray-300 overflow-hidden h-full">
+                   <div className="overflow-auto h-full">
+                     <table className="min-w-max text-sm border-collapse w-full">
+                       <thead className="bg-gray-200 text-gray-700 sticky top-0 shadow-md">
+                          <tr>
+                            <th className="p-3 text-left font-bold border-b border-gray-300">MÊS</th>
+                            <th className="p-3 text-center border-b border-gray-300" title="Atendimentos fechados não expirados">No Prazo (F)</th>
+                            <th className="p-3 text-center border-b border-gray-300" title="Atendimentos fechados expirados">Expirados (T)</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-blue-100/50">Total Real</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-blue-100/50">% Real</th>
+                            <th className="p-3 text-center border-b border-gray-300">No Prazo Acum</th>
+                            <th className="p-3 text-center border-b border-gray-300">Expirados Acum</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-green-100/50">Total Acum</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-green-100/50">% Acum</th>
+                            <th className="p-3 text-center border-b border-gray-300">Meta</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-200 bg-white">
+                          {MONTHS.map((m, i) => {
+                              const row = computed[i];
+                              const pRealVal = parseFloat(row.pReal);
+                              const realColor = pRealVal >= 96.41 ? 'text-green-600' : pRealVal < 96.41 ? 'text-red-600' : 'text-gray-700';
+                              const pAcumVal = parseFloat(row.pAcum);
+                              const acumColor = pAcumVal >= 96.41 ? 'text-green-600' : pAcumVal < 96.41 ? 'text-red-600' : 'text-gray-700';
+
+                              return (
+                                <tr key={i} className="hover:bg-blue-50 transition-colors">
+                                  <td className="p-3 font-medium border-r border-gray-100 bg-gray-50">{GOV_MONTHS_ROWS[i]}</td>
+                                  <td className="p-0 border-r border-gray-100"><input type="number" className="w-full h-10 text-center outline-none focus:bg-blue-50 bg-transparent text-gray-700" value={row.noPrazo ?? ''} onChange={e => handleUpdate(i, 'noPrazo', e.target.value)} /></td>
+                                  <td className="p-0 border-r border-gray-100"><input type="number" className="w-full h-10 text-center outline-none focus:bg-blue-50 bg-transparent text-gray-700" value={row.expirados ?? ''} onChange={e => handleUpdate(i, 'expirados', e.target.value)} /></td>
+                                  <td className="p-3 text-center font-bold bg-blue-50/30 text-gray-700">{row.tot || '-'}</td>
+                                  <td className={`p-3 text-center font-bold bg-blue-50/30 ${realColor}`}>{row.pReal !== '-' ? row.pReal + '%' : '-'}</td>
+                                  <td className="p-3 text-center text-gray-500">{row.sumNoPrazo || '-'}</td>
+                                  <td className="p-3 text-center text-gray-500">{row.sumExpirados || '-'}</td>
+                                  <td className="p-3 text-center font-bold bg-green-50/30 text-gray-700">{row.totAcum || '-'}</td>
+                                  <td className={`p-3 text-center font-bold bg-green-50/30 ${acumColor}`}>{row.pAcum !== '-' ? row.pAcum + '%' : '-'}</td>
+                                  <td className="p-3 text-center font-bold text-gray-400">96.41%</td>
+                                </tr>
+                              )
+                          })}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+               </div>
+             </div>
+          );
+        };
+
+        const AcuracidadeTab = ({ user }) => {
+          const [data, setData] = useState(Array(12).fill({ revisados: null, visualizados: null }));
+          const [loading, setLoading] = useState(true);
+
+          useEffect(() => {
+            if (!user) return;
+            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_acuracidade_doc'), (d) => {
+               if (d.exists() && d.data().months) setData(d.data().months);
+               setLoading(false);
+            });
+            return unsub;
+          }, [user]);
+
+          const handleUpdate = async (idx, field, val) => {
+             const newM = [...data];
+             newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
+             setData(newM);
+             if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_acuracidade_doc'), { months: newM });
+          };
+
+          const computed = data.map(m => {
+              const rev = m.revisados; const vis = m.visualizados;
+              let p = '-'; let rCalc = '-'; let vCalc = '-';
+              if (rev !== null && vis !== null) {
+                  const rScore = Math.min(100, Math.max(0, rev + 75));
+                  const vScore = Math.min(100, Math.max(0, vis - 50));
+                  rCalc = rScore; vCalc = vScore;
+                  p = ((rScore * 0.5) + (vScore * 0.5)).toFixed(2);
+              }
+              return { ...m, p, rCalc, vCalc };
+          });
+
+          if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando Acuracidade da Base...</p></div>;
+
+          return (
+             <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+               <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
+                 <div>
+                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-check-circle text-purple-600"></i> Acuracidade da Base</h2>
+                   <p className="text-xs text-gray-500 mt-1">Cálculo de Base de Conhecimento e Revisões</p>
+                 </div>
+               </div>
+               <div className="flex-1 overflow-auto bg-gray-100 p-4">
+                 <div className="bg-white rounded-lg shadow border border-gray-300 overflow-hidden h-full">
+                   <div className="overflow-auto h-full">
+                     <table className="min-w-max text-sm border-collapse w-full">
+                       <thead className="bg-gray-200 text-gray-700 sticky top-0 shadow-md">
+                          <tr>
+                            <th className="p-3 text-left font-bold border-b border-gray-300">Mês</th>
+                            <th className="p-3 text-center border-b border-gray-300">Peso</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-purple-50">Criados/Expirados Revisados</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-purple-50">Conhecimentos Visualizados</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-indigo-50" title="Valor calculado (+75) limitado a 100">Rev (Cálculo)</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-indigo-50" title="Valor calculado (-50) limitado a 100">Vis (Cálculo)</th>
+                            <th className="p-3 text-center border-b border-gray-300 bg-indigo-100 text-indigo-900">% Real/Acumulado</th>
+                            <th className="p-3 text-center border-b border-gray-300">Meta</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-200 bg-white">
+                          {MONTHS.map((m, i) => {
+                              const row = computed[i];
+                              const pVal = parseFloat(row.p);
+                              const color = pVal >= 90 ? 'text-green-600' : pVal < 90 ? 'text-red-600' : 'text-indigo-700';
+
+                              return (
+                                <tr key={i} className="hover:bg-purple-50 transition-colors">
+                                  <td className="p-3 font-medium border-r border-gray-100 bg-gray-50">{GOV_MONTHS_ROWS[i]}</td>
+                                  <td className="p-3 text-center text-gray-500 font-bold border-r border-gray-100">0.5</td>
+                                  <td className="p-0 border-r border-gray-100"><input type="number" className="w-full h-10 text-center outline-none focus:bg-purple-50 bg-transparent text-gray-700 font-medium" value={row.revisados ?? ''} onChange={e => handleUpdate(i, 'revisados', e.target.value)} /></td>
+                                  <td className="p-0 border-r border-gray-100"><input type="number" className="w-full h-10 text-center outline-none focus:bg-purple-50 bg-transparent text-gray-700 font-medium" value={row.visualizados ?? ''} onChange={e => handleUpdate(i, 'visualizados', e.target.value)} /></td>
+                                  <td className="p-3 text-center text-gray-600 bg-indigo-50/30">{row.rCalc}</td>
+                                  <td className="p-3 text-center text-gray-600 bg-indigo-50/30">{row.vCalc}</td>
+                                  <td className={`p-3 text-center font-bold bg-indigo-100/30 text-lg ${color}`}>{row.p !== '-' ? row.p + '%' : '-'}</td>
+                                  <td className="p-3 text-center font-bold text-gray-400">90%</td>
+                                </tr>
+                              )
+                          })}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+               </div>
+             </div>
+          );
+        };
+
+        const IrosTab = ({ user }) => {
+          const [data, setData] = useState(Array(12).fill({ req: null, inc: null, antigos: null, vazio: null, semResolv: null, encerrados: null }));
+          const [loading, setLoading] = useState(true);
+
+          useEffect(() => {
+            if (!user) return;
+            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_iros_doc'), (d) => {
+               if (d.exists() && d.data().months) setData(d.data().months);
+               setLoading(false);
+            });
+            return unsub;
+          }, [user]);
+
+          const handleUpdate = async (idx, field, val) => {
+            const newM = [...data];
+            newM[idx] = { ...newM[idx], [field]: val === '' ? null : Number(val) };
+            setData(newM);
+            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_iros_doc'), { months: newM });
+          };
+
+          const rows = [
+              { k: 'req', label: 'Backlog Requisição (Últimos 3 meses)' },
+              { k: 'inc', label: 'Backlog Incidente (Últimos 3 meses)' },
+              { k: 'tot_backlog', label: 'Total Backlog (Últimos 3 meses)', readonly: true },
+              { k: 'spacer', label: '', empty: true },
+              { k: 'antigos', label: 'Total Backlogs antigos' },
+              { k: 'vazio', label: 'Total Tarefas com Grupo vazio' },
+              { k: 'semResolv', label: 'Total Grupos sem Resolvedores' },
+              { k: 'encerrados', label: 'Total Processos Encerrados' },
+              { k: 'iros', label: 'IROS (Índice de Resolutividade Otimizada)', readonly: true }
+          ];
+
+          if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando IROS...</p></div>;
+
+          return (
+             <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+               <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
+                 <div>
+                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-chart-area text-yellow-600"></i> IROS</h2>
+                   <p className="text-xs text-gray-500 mt-1">Soma de Backlogs, Tarefas e Processos Encerrados</p>
+                 </div>
+               </div>
+               <div className="flex-1 overflow-auto bg-gray-100 p-4">
+                 <div className="bg-white rounded-lg shadow border border-gray-300 overflow-hidden h-full">
+                   <div className="overflow-auto h-full pb-2">
+                     <table className="min-w-max text-sm border-collapse w-full">
+                       <thead className="bg-gray-200 text-gray-700 sticky top-0 shadow-md z-10">
+                          <tr>
+                            <th className="p-3 text-left font-bold border-b border-gray-300 w-[350px] sticky left-0 bg-gray-200 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.2)]">Métrica / Mês</th>
+                            {MONTHS.map(m => <th key={m} className="p-3 text-center border-b border-gray-300 min-w-[120px]">{m}</th>)}
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-200 bg-white">
+                          {rows.map(r => {
+                             if (r.empty) return <tr key="spacer" className="bg-gray-100 h-4 border-y border-gray-300"> <td colSpan="13"></td> </tr>;
+
+                             const isResult = r.k === 'iros';
+                             const isSubResult = r.k === 'tot_backlog';
+                             
+                             return (
+                                <tr key={r.k} className={`hover:bg-yellow-50 transition-colors ${r.readonly ? 'bg-gray-50/50' : ''}`}>
+                                   <td className={`p-3 border-r border-gray-200 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] bg-inherit ${isResult ? 'font-bold text-yellow-700 bg-yellow-100/50' : isSubResult ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-gray-700 font-medium'}`}>{r.label}</td>
+                                   {MONTHS.map((m, i) => {
+                                      const d = data[i];
+                                      let val = '';
+                                      if (r.k === 'tot_backlog') {
+                                         if (d.req !== null || d.inc !== null) val = (d.req||0) + (d.inc||0);
+                                      } else if (r.k === 'iros') {
+                                         const num = (d.antigos||0) + (d.vazio||0) + (d.semResolv||0);
+                                         const den = d.encerrados;
+                                         if (den > 0) val = (num / den).toFixed(6); 
+                                      } else {
+                                         val = d[r.k] ?? '';
+                                      }
+                                      return (
+                                         <td key={i} className={`p-0 border-r border-gray-100 ${isResult ? 'bg-yellow-100/50' : isSubResult ? 'bg-blue-50/50' : ''}`}>
+                                            {r.readonly ? 
+                                               <div className={`w-full h-10 flex items-center justify-center font-bold ${isResult ? 'text-yellow-700 text-lg' : 'text-blue-700 text-md'}`}>{val || '-'}</div> : 
+                                               <input type="number" className="w-full h-10 text-center outline-none focus:bg-yellow-50 bg-transparent text-gray-700" value={val} onChange={e => handleUpdate(i, r.k, e.target.value)} />
+                                            }
+                                         </td>
+                                      )
+                                   })}
+                                </tr>
+                             )
+                          })}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+               </div>
+             </div>
+          );
+        };
+
+        const TmaTab = ({ user }) => {
+          const [data, setData] = useState(Array(12).fill(''));
+          const [loading, setLoading] = useState(true);
+
+          useEffect(() => {
+            if (!user) return;
+            const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_tma_doc'), (d) => {
+               if (d.exists() && d.data().months) setData(d.data().months);
+               setLoading(false);
+            });
+            return unsub;
+          }, [user]);
+
+          const handleUpdate = async (idx, val) => {
+            const newM = [...data];
+            newM[idx] = val;
+            setData(newM);
+            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_tma_doc'), { months: newM });
+          };
+
+          if (loading) return <div className="flex flex-col items-center justify-center h-full gap-4 text-white"><i className="fas fa-spinner fa-spin text-4xl"></i><p>Carregando TMA...</p></div>;
+
+          return (
+             <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/50 flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
+               <div className="p-4 border-b border-gray-200 bg-white/50 flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
+                 <div>
+                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i className="fas fa-stopwatch text-red-600"></i> TMA</h2>
+                   <p className="text-xs text-gray-500 mt-1">Tempo Médio de Atendimento Mensal</p>
+                 </div>
+               </div>
+               <div className="flex-1 overflow-auto bg-gray-100 p-4 flex justify-center">
+                 <div className="bg-white rounded-lg shadow border border-gray-300 overflow-hidden w-full max-w-4xl h-fit">
+                     <table className="min-w-full text-sm border-collapse">
+                       <thead className="bg-gray-200 text-gray-700 shadow-sm">
+                          <tr>
+                            <th className="p-4 text-left font-bold border-b border-gray-300 w-64">Mês</th>
+                            <th className="p-4 text-left font-bold border-b border-gray-300">TMA Registrado</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-200 bg-white">
+                          {MONTHS.map((m, i) => (
+                             <tr key={i} className="hover:bg-red-50 transition-colors">
+                                <td className="p-4 font-bold border-r border-gray-100 bg-gray-50 text-gray-700 uppercase">{GOV_MONTHS_ROWS[i]}</td>
+                                <td className="p-0">
+                                   <input type="text" className="w-full h-14 px-6 outline-none focus:bg-red-50 text-gray-700 font-medium bg-transparent" placeholder="Ex: 7 Dias 15 Horas 28 Minutos 6 Segundos" value={data[i]} onChange={e => handleUpdate(i, e.target.value)} />
+                                </td>
+                             </tr>
+                          ))}
+                       </tbody>
+                     </table>
+                 </div>
+               </div>
+             </div>
+          );
+        };
+
+        const GovBiContainer = ({ user }) => {
+          const [activeSubTab, setActiveSubTab] = useState('sla');
+
+          return (
+            <div className="flex flex-col h-full gap-4">
+              <div className="flex gap-2 bg-white/50 p-1 rounded-lg w-fit backdrop-blur-sm overflow-x-auto shadow-sm border border-white/50">
+                <button onClick={() => setActiveSubTab('sla')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'sla' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-blue-600'}`}>
+                  <i className="fas fa-clock"></i> SLA Governança
+                </button>
+                <button onClick={() => setActiveSubTab('acuracidade')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'acuracidade' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-purple-600'}`}>
+                  <i className="fas fa-check-circle"></i> Acuracidade da Base
+                </button>
+                <button onClick={() => setActiveSubTab('iros')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'iros' ? 'bg-yellow-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-yellow-600'}`}>
+                  <i className="fas fa-chart-area"></i> IROS
+                </button>
+                <button onClick={() => setActiveSubTab('tma')} className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeSubTab === 'tma' ? 'bg-red-600 text-white shadow-md' : 'text-gray-600 hover:bg-white/80 hover:text-red-600'}`}>
+                  <i className="fas fa-stopwatch"></i> TMA
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-hidden">
+                {activeSubTab === 'sla' && <SlaGovernancaTab user={user} />}
+                {activeSubTab === 'acuracidade' && <AcuracidadeTab user={user} />}
+                {activeSubTab === 'iros' && <IrosTab user={user} />}
+                {activeSubTab === 'tma' && <TmaTab user={user} />}
+              </div>
+            </div>
+          );
+        };
+
         const KanbanModule = ({ user }) => {
           const [tasks, setTasks] = useState([]);
           const [loading, setLoading] = useState(true);
@@ -1176,7 +1536,7 @@
                   </button>
                 </div>
 
-                <nav className="flex-1 py-6 px-3 space-y-3">
+                <nav className="flex-1 py-6 px-3 space-y-3 overflow-y-auto">
                   <button onClick={() => setActiveTab('projects')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'projects' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-blue-600'}`}>
                     <i className={`fas fa-columns text-xl shrink-0 ${activeTab === 'projects' ? 'text-white' : 'text-gray-400 group-hover:text-blue-600'}`}></i>
                     {isSidebarOpen && <span className="font-medium">Painel de Projetos</span>}
@@ -1197,9 +1557,20 @@
                     <i className={`fas fa-chart-pie text-xl shrink-0 ${activeTab === 'dir' ? 'text-white' : 'text-gray-400 group-hover:text-emerald-600'}`}></i>
                     {isSidebarOpen && <span className="font-medium text-left leading-tight">Indicadores de Diretoria</span>}
                   </button>
+
+                  {isSidebarOpen ? (
+                     <hr className="my-4 border-gray-200 w-5/6 mx-auto" />
+                  ) : (
+                     <hr className="my-4 border-gray-200 w-8 mx-auto" />
+                  )}
+
+                  <button onClick={() => setActiveTab('gov_bi')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'gov_bi' ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-orange-600'}`}>
+                    <i className={`fas fa-database text-xl shrink-0 ${activeTab === 'gov_bi' ? 'text-white' : 'text-gray-400 group-hover:text-orange-600'}`}></i>
+                    {isSidebarOpen && <span className="font-medium text-left leading-tight">Indicadores Gov BI</span>}
+                  </button>
                 </nav>
 
-                <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+                <div className="p-4 border-t border-gray-100 bg-gray-50/50 shrink-0">
                    {isSidebarOpen ? (
                      <div className="flex items-center gap-3">
                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 text-white flex items-center justify-center text-sm font-bold shadow-md">CD</div>
@@ -1217,9 +1588,10 @@
                 </header>
 
                 <main className="flex-1 overflow-y-auto p-4 md:p-8 pt-2">
-                  <div className="max-w-[1800px] mx-auto h-full">
+                  <div className="max-w-[1800px] mx-auto h-full pb-10">
                     {activeTab === 'projects' && <ProjectsModule user={user} />}
                     {activeTab === 'dir' && <DirectorateContainer user={user} />}
+                    {activeTab === 'gov_bi' && <GovBiContainer user={user} />}
                     {activeTab === 'kanban' && <KanbanModule user={user} />}
                   </div>
                 </main>
