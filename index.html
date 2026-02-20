@@ -160,7 +160,7 @@
               });
             });
           });
-          return data.map((d, i) => ({ ...d, order: i, months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null })) }));
+          return data.map((d, i) => ({ ...d, order: i, months: Array.from({length: 12}, () => ({ falseVal: null, trueVal: null, real: null, acum: null })) }));
         };
 
         const generateSlaData = () => {
@@ -171,7 +171,7 @@
           ];
           return specificSlaList.map((name, i) => ({ 
             name, target: 95.0, type: "percent", direction: "max", isMain: true, order: i, 
-            months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null })) 
+            months: Array.from({length: 12}, () => ({ falseVal: null, trueVal: null, real: null, acum: null })) 
           }));
         };
 
@@ -192,7 +192,7 @@
           ];
           return backlogList.map((name, i) => ({ 
             name, target: 20, type: "number", direction: "min", isMain: true, order: i, 
-            months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null })) 
+            months: Array.from({length: 12}, () => ({ falseVal: null, trueVal: null, real: null, acum: null })) 
           }));
         };
 
@@ -595,7 +595,7 @@
                      return {
                         name: name,
                         target: 95.0, type: "percent", direction: "max", weight: 1, order: index,
-                        months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null }))
+                        months: Array.from({length: 12}, () => ({ falseVal: null, trueVal: null, real: null, acum: null }))
                      };
                   }
                 });
@@ -838,7 +838,7 @@
             const newInd = {
               name: "Novo Indicador",
               target: 95.0, weight: 1, type: "percent", direction: "max", isMain: false, order: newOrder,
-              months: Array(12).fill(null).map(() => ({ falseVal: null, trueVal: null, real: null, acum: null }))
+              months: Array.from({length: 12}, () => ({ falseVal: null, trueVal: null, real: null, acum: null }))
             };
             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', collectionName), newInd);
           };
@@ -1028,7 +1028,7 @@
         // 5.5. NOVOS MÓDULOS DE GOVERNANÇA BI
         // ==========================================
         const SlaGovernancaTab = ({ user }) => {
-          const [data, setData] = useState(Array(12).fill({ noPrazo: null, expirados: null }));
+          const [data, setData] = useState(Array.from({length: 12}, () => ({ noPrazo: null, expirados: null })));
           const [loading, setLoading] = useState(true);
 
           useEffect(() => {
@@ -1048,8 +1048,8 @@
           };
 
           let sumNoPrazo = 0; let sumExpirados = 0;
-          const computed = data.map(m => {
-             const np = m.noPrazo || 0; const exp = m.expirados || 0;
+          const computed = (data || []).map(m => {
+             const np = m?.noPrazo || 0; const exp = m?.expirados || 0;
              const tot = np + exp;
              const pReal = tot > 0 ? ((np / tot)*100).toFixed(2) : '-';
              sumNoPrazo += np; sumExpirados += exp;
@@ -1088,7 +1088,7 @@
                        </thead>
                        <tbody className="divide-y divide-gray-200 bg-white">
                           {MONTHS.map((m, i) => {
-                              const row = computed[i];
+                              const row = computed[i] || {};
                               const pRealVal = parseFloat(row.pReal);
                               const realColor = pRealVal >= 96.41 ? 'text-green-600' : pRealVal < 96.41 ? 'text-red-600' : 'text-gray-700';
                               const pAcumVal = parseFloat(row.pAcum);
@@ -1119,7 +1119,7 @@
         };
 
         const AcuracidadeTab = ({ user }) => {
-          const [data, setData] = useState(Array(12).fill({ revisados: null, visualizados: null }));
+          const [data, setData] = useState(Array.from({length: 12}, () => ({ revisados: null, visualizados: null })));
           const [loading, setLoading] = useState(true);
 
           useEffect(() => {
@@ -1138,8 +1138,8 @@
              if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_bi_acuracidade_doc'), { months: newM });
           };
 
-          const computed = data.map(m => {
-              const rev = m.revisados; const vis = m.visualizados;
+          const computed = (data || []).map(m => {
+              const rev = m?.revisados ?? null; const vis = m?.visualizados ?? null;
               let p = '-'; let rCalc = '-'; let vCalc = '-';
               if (rev !== null && vis !== null) {
                   const rScore = Math.min(100, Math.max(0, rev + 75));
@@ -1178,7 +1178,7 @@
                        </thead>
                        <tbody className="divide-y divide-gray-200 bg-white">
                           {MONTHS.map((m, i) => {
-                              const row = computed[i];
+                              const row = computed[i] || {};
                               const pVal = parseFloat(row.p);
                               const color = pVal >= 90 ? 'text-green-600' : pVal < 90 ? 'text-red-600' : 'text-indigo-700';
 
@@ -1188,9 +1188,9 @@
                                   <td className="p-3 text-center text-gray-500 font-bold border-r border-gray-100">0.5</td>
                                   <td className="p-0 border-r border-gray-100"><input type="number" className="w-full h-10 text-center outline-none focus:bg-purple-50 bg-transparent text-gray-700 font-medium" value={row.revisados ?? ''} onChange={e => handleUpdate(i, 'revisados', e.target.value)} /></td>
                                   <td className="p-0 border-r border-gray-100"><input type="number" className="w-full h-10 text-center outline-none focus:bg-purple-50 bg-transparent text-gray-700 font-medium" value={row.visualizados ?? ''} onChange={e => handleUpdate(i, 'visualizados', e.target.value)} /></td>
-                                  <td className="p-3 text-center text-gray-600 bg-indigo-50/30">{row.rCalc}</td>
-                                  <td className="p-3 text-center text-gray-600 bg-indigo-50/30">{row.vCalc}</td>
-                                  <td className={`p-3 text-center font-bold bg-indigo-100/30 text-lg ${color}`}>{row.p !== '-' ? row.p + '%' : '-'}</td>
+                                  <td className="p-3 text-center text-gray-600 bg-indigo-50/30">{row.rCalc || '-'}</td>
+                                  <td className="p-3 text-center text-gray-600 bg-indigo-50/30">{row.vCalc || '-'}</td>
+                                  <td className={`p-3 text-center font-bold bg-indigo-100/30 text-lg ${color}`}>{row.p && row.p !== '-' ? row.p + '%' : '-'}</td>
                                   <td className="p-3 text-center font-bold text-gray-400">90%</td>
                                 </tr>
                               )
@@ -1205,7 +1205,7 @@
         };
 
         const IrosTab = ({ user }) => {
-          const [data, setData] = useState(Array(12).fill({ req: null, inc: null, antigos: null, vazio: null, semResolv: null, encerrados: null }));
+          const [data, setData] = useState(Array.from({length: 12}, () => ({ req: null, inc: null, antigos: null, vazio: null, semResolv: null, encerrados: null })));
           const [loading, setLoading] = useState(true);
 
           useEffect(() => {
@@ -1267,10 +1267,10 @@
                                 <tr key={r.k} className={`hover:bg-yellow-50 transition-colors ${r.readonly ? 'bg-gray-50/50' : ''}`}>
                                    <td className={`p-3 border-r border-gray-200 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] bg-inherit ${isResult ? 'font-bold text-yellow-700 bg-yellow-100/50' : isSubResult ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-gray-700 font-medium'}`}>{r.label}</td>
                                    {MONTHS.map((m, i) => {
-                                      const d = data[i];
+                                      const d = data[i] || {};
                                       let val = '';
                                       if (r.k === 'tot_backlog') {
-                                         if (d.req !== null || d.inc !== null) val = (d.req||0) + (d.inc||0);
+                                         if (d.req != null || d.inc != null) val = (d.req||0) + (d.inc||0);
                                       } else if (r.k === 'iros') {
                                          const num = (d.antigos||0) + (d.vazio||0) + (d.semResolv||0);
                                          const den = d.encerrados;
@@ -1300,7 +1300,7 @@
         };
 
         const TmaTab = ({ user }) => {
-          const [data, setData] = useState(Array(12).fill(''));
+          const [data, setData] = useState(Array.from({length: 12}, () => ''));
           const [loading, setLoading] = useState(true);
 
           useEffect(() => {
@@ -1343,7 +1343,7 @@
                              <tr key={i} className="hover:bg-red-50 transition-colors">
                                 <td className="p-4 font-bold border-r border-gray-100 bg-gray-50 text-gray-700 uppercase">{GOV_MONTHS_ROWS[i]}</td>
                                 <td className="p-0">
-                                   <input type="text" className="w-full h-14 px-6 outline-none focus:bg-red-50 text-gray-700 font-medium bg-transparent" placeholder="Ex: 7 Dias 15 Horas 28 Minutos 6 Segundos" value={data[i]} onChange={e => handleUpdate(i, e.target.value)} />
+                                   <input type="text" className="w-full h-14 px-6 outline-none focus:bg-red-50 text-gray-700 font-medium bg-transparent" placeholder="Ex: 7 Dias 15 Horas 28 Minutos 6 Segundos" value={data[i] || ''} onChange={e => handleUpdate(i, e.target.value)} />
                                 </td>
                              </tr>
                           ))}
@@ -1566,7 +1566,7 @@
 
                   <button onClick={() => setActiveTab('gov_bi')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${activeTab === 'gov_bi' ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50 hover:text-orange-600'}`}>
                     <i className={`fas fa-database text-xl shrink-0 ${activeTab === 'gov_bi' ? 'text-white' : 'text-gray-400 group-hover:text-orange-600'}`}></i>
-                    {isSidebarOpen && <span className="font-medium text-left leading-tight">Indicadores Gov BI</span>}
+                    {isSidebarOpen && <span className="font-medium text-left leading-tight">Indicadores Governança</span>}
                   </button>
                 </nav>
 
