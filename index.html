@@ -250,6 +250,8 @@
           const [filter, setFilter] = useState('Todos');
           const [loading, setLoading] = useState(true);
           const [deleteId, setDeleteId] = useState(null);
+          const [showAlertModal, setShowAlertModal] = useState(false);
+          const [alertData, setAlertData] = useState({ bruno: [], renata: [] });
           const fileInputRef = useRef(null);
           
           const [colWidths, setColWidths] = useState(() => JSON.parse(localStorage.getItem('govProjectsColWidths')) || { process: 200, action: 300, owner: 150, area: 150, criticality: 120, status: 140, dates: 160, sla: 80, remaining: 100, notes: 250, actions: 50 });
@@ -333,13 +335,40 @@
           };
 
           const handleEmailAlert = () => {
-            const critical = projects.filter(p => {
-              const d = getDays(p.endDate);
-              return (d !== null && d <= 5 && p.status !== 'Concluído') || p.status === 'Atrasado';
+            const brunoProjects = [];
+            const renataProjects = [];
+
+            projects.forEach(p => {
+              if (p.status === 'Concluído') return;
+              const days = getDays(p.endDate);
+              if (days === null) return;
+
+              if (days === 10 || days === 5 || days < 0) {
+                const ownerLower = (p.owner || '').toLowerCase();
+                if (ownerLower.includes('bruno')) brunoProjects.push(p);
+                if (ownerLower.includes('renata')) renataProjects.push(p);
+              }
             });
-            if (!critical.length) return alert("Nenhum projeto crítico encontrado.");
-            const body = "Projetos Críticos:\n\n" + critical.map(p => `• ${p.process}: ${p.action} (${p.status})`).join("\n");
-            window.location.href = `mailto:?subject=Alerta Projetos&body=${encodeURIComponent(body)}`;
+
+            if (brunoProjects.length === 0 && renataProjects.length === 0) {
+              alert("Nenhum projeto de Bruno ou Renata está faltando exatamente 10 dias, 5 dias para vencer, ou atrasado no momento.");
+              return;
+            }
+
+            setAlertData({ bruno: brunoProjects, renata: renataProjects });
+            setShowAlertModal(true);
+          };
+
+          const sendSpecificEmail = (ownerName, email, projectList) => {
+            let body = `Olá ${ownerName},\n\nSegue resumo dos seus projetos com prazo crítico (faltando 10 ou 5 dias, ou atrasados):\n\n`;
+            projectList.forEach(p => {
+              const days = getDays(p.endDate);
+              const statusText = days < 0 ? `ATRASADO (${Math.abs(days)} dias)` : `Vence em ${days} dias`;
+              body += `• [${p.process}] ${p.action}\n  Status: ${statusText}\n\n`;
+            });
+            body += "Atenciosamente,\nCélula de Desempenho Governança CSC";
+            
+            window.location.href = `mailto:${email}?subject=${encodeURIComponent(`ALERTA: Prazos de Projetos - ${ownerName}`)}&body=${encodeURIComponent(body)}`;
           };
 
           return (
@@ -352,6 +381,42 @@
                     <div className="flex justify-end gap-2 mt-4">
                       <button onClick={() => setDeleteId(null)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors">Cancelar</button>
                       <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-2"><i className="fas fa-trash"></i> Excluir</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {showAlertModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                  <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-2xl">
+                    <h3 className="font-bold text-lg mb-4 text-gray-800">Enviar Alertas de E-mail</h3>
+                    <p className="text-sm text-gray-600 mb-4">Projetos críticos encontrados (10 dias, 5 dias ou atrasados):</p>
+                    <div className="space-y-4">
+                      {alertData.bruno.length > 0 && (
+                        <div className="flex justify-between items-center bg-gray-50 p-3 rounded border border-gray-200">
+                          <div>
+                            <p className="font-bold text-gray-800">Bruno Augusto</p>
+                            <p className="text-xs text-gray-500">{alertData.bruno.length} projeto(s)</p>
+                          </div>
+                          <button onClick={() => sendSpecificEmail('Bruno', 'bruno.augusto@equatorialenergia.com.br', alertData.bruno)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2 transition-colors">
+                            <i className="fas fa-paper-plane"></i> E-mail
+                          </button>
+                        </div>
+                      )}
+                      {alertData.renata.length > 0 && (
+                        <div className="flex justify-between items-center bg-gray-50 p-3 rounded border border-gray-200">
+                          <div>
+                            <p className="font-bold text-gray-800">Renata Tavares</p>
+                            <p className="text-xs text-gray-500">{alertData.renata.length} projeto(s)</p>
+                          </div>
+                          <button onClick={() => sendSpecificEmail('Renata', 'renata.tavares@equatorialenergia.com.br', alertData.renata)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2 transition-colors">
+                            <i className="fas fa-paper-plane"></i> E-mail
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <button onClick={() => setShowAlertModal(false)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors text-sm font-medium">Fechar</button>
                     </div>
                   </div>
                 </div>
@@ -954,7 +1019,7 @@
                      {columns.map(col => {
                         let topColor = "bg-gray-300";
                         if(col === "A Iniciar") topColor = "bg-gray-400";
-                        if(col === "Em execução") topColor = "bg-blue-500";
+                        if(col === "Em execution") topColor = "bg-blue-500";
                         if(col === "Impedimento") topColor = "bg-red-500";
                         if(col === "Finalizado") topColor = "bg-green-500";
 
