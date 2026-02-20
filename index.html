@@ -254,7 +254,7 @@
           const [alertData, setAlertData] = useState({ bruno: [], renata: [] });
           const fileInputRef = useRef(null);
           
-          const [colWidths, setColWidths] = useState(() => JSON.parse(localStorage.getItem('govProjectsColWidths')) || { process: 200, action: 300, owner: 150, area: 150, criticality: 120, status: 140, dates: 160, sla: 80, remaining: 100, notes: 250, actions: 50 });
+          const [colWidths, setColWidths] = useState(() => JSON.parse(localStorage.getItem('govProjectsColWidths')) || { process: 200, action: 300, owner: 150, area: 150, criticality: 120, status: 140, dates: 160, sla: 80, remaining: 100, notes: 250, actions: 80 });
           const [rowDensity, setRowDensity] = useState(() => localStorage.getItem('govProjectsRowDensity') || 'normal');
           const [resizingCol, setResizingCol] = useState(null);
           const resizeStartX = useRef(null);
@@ -284,6 +284,22 @@
           const addProject = () => user && addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'gov_projects'), { displayId: Date.now(), process: "Novo", action: "", owner: "", area: "", criticality: "Baixa", status: "Não Iniciado", startDate: "", endDate: "", sla: 0, notes: "" });
           const confirmDelete = () => user && deleteId && deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gov_projects', deleteId)).then(() => setDeleteId(null));
           
+          // Função para exportar projeto para o Kanban
+          const sendToKanban = async (p) => {
+            if (!user) return;
+            try {
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'kanban_board_tasks'), {
+                text: `[Projeto] ${p.process}\nAção: ${p.action}\nDono: ${p.owner || 'Não definido'}`,
+                status: "A Iniciar",
+                createdAt: Date.now()
+              });
+              alert(`O projeto "${p.process}" foi enviado para a coluna 'A Iniciar' do seu Quadro Kanban!`);
+            } catch (err) {
+              console.error("Erro ao enviar para o kanban", err);
+              alert("Erro ao enviar o projeto para o Kanban.");
+            }
+          };
+
           useEffect(() => {
             const move = (e) => resizingCol && setColWidths(p => ({ ...p, [resizingCol]: Math.max(50, p[resizingCol] + (e.pageX - resizeStartX.current)) }));
             const up = () => { setResizingCol(null); resizeStartX.current = null; };
@@ -457,7 +473,7 @@
                       <ResizableHeader label="SLA (dias)" colKey="sla" />
                       <ResizableHeader label="Restante" colKey="remaining" />
                       <ResizableHeader label="Observações" colKey="notes" />
-                      <th className="w-[50px] bg-white/90 border-b border-gray-200"></th>
+                      <th className="w-[80px] bg-white/90 border-b border-gray-200"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white/50">
@@ -487,7 +503,10 @@
                           <td className={`px-4 ${pad} text-center`}><input type="number" value={p.sla} onChange={e=>updateField(p.id,'sla',e.target.value)} className="w-12 text-center bg-transparent border-b border-gray-100 hover:border-gray-300 focus:border-blue-500 focus:outline-none"/></td>
                           <td className={`px-4 ${pad} text-center text-xs`}><span className={color}>{d !== null ? `${d} d` : '-'}</span></td>
                           <td className={`px-4 ${pad}`}><textarea value={p.notes} onChange={e=>updateField(p.id,'notes',e.target.value)} className="w-full bg-transparent resize-none focus:bg-white focus:shadow-sm focus:ring-1 focus:ring-blue-200 rounded p-1 text-xs text-gray-500" rows={rowDensity === 'compact' ? 1 : 2} placeholder="Obs..."/></td>
-                          <td className={`px-4 ${pad} text-center`}><button onClick={()=>setDeleteId(p.id)} className="text-gray-300 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50"><i className="fas fa-trash"></i></button></td>
+                          <td className={`px-4 ${pad} text-center flex items-center justify-center gap-2 h-full min-h-[40px]`}>
+                            <button onClick={() => sendToKanban(p)} title="Adicionar ao Kanban" className="text-indigo-400 hover:text-indigo-600 transition-colors p-1.5 rounded-full hover:bg-indigo-50"><i className="fas fa-tasks"></i></button>
+                            <button onClick={()=>setDeleteId(p.id)} title="Excluir Projeto" className="text-gray-300 hover:text-red-600 transition-colors p-1.5 rounded-full hover:bg-red-50"><i className="fas fa-trash"></i></button>
+                          </td>
                         </tr>
                       )
                     })}
@@ -1019,7 +1038,7 @@
                      {columns.map(col => {
                         let topColor = "bg-gray-300";
                         if(col === "A Iniciar") topColor = "bg-gray-400";
-                        if(col === "Em execution") topColor = "bg-blue-500";
+                        if(col === "Em execução") topColor = "bg-blue-500";
                         if(col === "Impedimento") topColor = "bg-red-500";
                         if(col === "Finalizado") topColor = "bg-green-500";
 
